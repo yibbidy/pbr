@@ -1,0 +1,235 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Texture Editor with Prototype Actions</title>
+
+  <link rel="stylesheet" href="pbr.css">
+  
+</head>
+<body>
+
+  <div id="left-container">
+
+      <div id="actions-palette">
+        <div class="header">
+          Prototype actions
+        </div>
+
+        <div class="action-row">
+          <button id="btn-show-demo-video"
+                  title="Show a tutorial video">
+            Demo video
+          </button>
+        </div>
+
+        <div class="action-row">
+          <button id="btn-create-object"
+                  title="Creates and shows a new object">
+            Create object
+          </button>
+        </div>
+          
+          <div class="action-row">
+          <button id="btn-create-texture"
+                  title="Simulating creation of a new texture from resource manager">
+            Create new texture
+          </button>
+        </div>
+
+        <!--
+          You can add more rows/buttons here by copying the same structure:
+          <div class="action-row">
+            <button id="btn-some-action" title="Tooltip text…">Some action</button>
+          </div>
+        -->
+      </div>
+
+      <div id="textures-palette">
+          <div class="header">Textures</div>
+          <div id="texture-grid">
+          <!-- Each new “texture-item” will be appended inside here -->
+          </div>
+      </div>
+  </div>
+
+  <div id="scene-container">
+    <svg id="scene"></svg>
+
+    <!-- 50% semi‐transparent orange border (hidden until “create texture” context) -->
+    <div id="create-texture-border"></div>
+
+    <!-- Overlay buttons (hidden until “create texture” context) -->
+    <div id="texture-create-controls">
+      <!-- Preferences button: gear icon inside a grey circle -->
+      <button class="prefs-button" title="Edit texture preferences">⚙</button>
+      <!-- Done button: orange rectangle with checkmark + “Done” -->
+      <button class="done-button">✓ Done</button>
+    </div>
+  </div>
+
+  <!------- Right docked palette -------->
+  <!-- === Palette Container === -->
+  <div id="palette">
+    <!-- Header -->
+    <div class="header">
+      <span class="toggle">▼</span>
+      Edit Texture
+    </div>
+
+    <!-- Expandable Content -->
+    <div class="content">
+      <!-- Row #1: Base weight (number + drag‐handle) -->
+      <div class="row">
+        <label>Base weight:</label>
+        <div class="input-container">
+          <input id="base-weight" type="number" value="0" step="1" min="0" max="100">
+          <div class="drag-handle">⇕</div>
+        </div>
+        <!-- No thumbnail in this row, so no button here -->
+      </div>
+
+      <!-- Row #2: Color (stretches + thumbnail at right) -->
+      <div class="row">
+        <label class="sub-label">Color:</label>
+        <input id="base-color" type="color" value="#777777">
+        <button class="thumb-button"></button>
+      </div>
+
+      <!-- Row #3: Metalness (number + drag‐handle, stretches + thumbnail at right) -->
+      <div class="row">
+        <label class="sub-label">Metalness:</label>
+        <div class="input-container">
+          <input id="metalness" type="number" value="0" step="1">
+          <div class="drag-handle">⇕</div>
+        </div>
+        <button class="thumb-button"></button>
+      </div>
+
+      <!-- Row #4: Diffuse roughness (number + drag‐handle, stretches + thumbnail at right) -->
+      <div class="row">
+        <label class="sub-label">Diffuse roughness:</label>
+        <div class="input-container">
+          <input type="number" value="0" step="1">
+          <div id="diffuse-roughness" class="drag-handle">⇕</div>
+        </div>
+        <button class="thumb-button"></button>
+      </div>
+
+      <!-- Row #5: Specular weight (number + drag‐handle) -->
+      <div class="row">
+        <label>Specular weight:</label>
+        <div class="input-container">
+          <input id="spec-weight" type="number" value="0" step="1" min="0" max="100">
+          <div class="drag-handle">⇕</div>
+        </div>
+        <!-- No thumbnail in this row, so no button here -->
+      </div>
+
+        <div class="row">
+            <label class="sub-label">Color:</label>
+            <input id="spec-color" type="color" value="#777777">
+            <button class="thumb-button"></button>
+        </div>
+
+        <div class="row">
+            <label class="sub-label">Roughness:</label>
+            <div class="input-container">
+            <input id="spec-roughness" type="number" value="0" step="1">
+            <div class="drag-handle">⇕</div>
+            </div>
+            <button class="thumb-button"></button>
+        </div>
+
+        <div class="row">
+            <label class="sub-label">Roughness anisotropy:</label>
+            <div class="input-container">
+            <input id="roughness-anisotropy" type="number" value="0" step="1">
+            <div class="drag-handle">⇕</div>
+            </div>
+            <button class="thumb-button"></button>
+        </div>
+
+        <div class="row">
+            <label class="sub-label">Ior:</label>
+            <div class="input-container">
+            <input id="ior" type="number" value="0" step="1">
+            <div class="drag-handle">⇕</div>
+            </div>
+            <button class="thumb-button"></button>
+        </div>
+
+        <!-- Transmission -->
+        <div class="row">
+          <label>Transmission weight:</label>
+          <div class="input-container">
+            <input id="trans-weight" type="number" value="0" step="1" min="0" max="100">
+            <div class="drag-handle">⇕</div>
+          </div>
+          <!-- No thumbnail in this row, so no button here -->
+        </div>
+
+          <div class="row">
+              <label class="sub-label">Color:</label>
+              <input id="trans-color" type="color" value="#777777">
+              <button class="thumb-button"></button>
+          </div>
+
+          <div class="row">
+              <label class="sub-label">Depth:</label>
+              <div class="input-container">
+              <input id="depth" type="number" value="0" step="1">
+              <div class="drag-handle">⇕</div>
+              </div>
+              <button class="thumb-button"></button>
+          </div>
+
+          <div class="row">
+              <label class="sub-label">Scatter:</label>
+              <div class="input-container">
+              <input id="scatter" type="number" value="0" step="1">
+              <div class="drag-handle">⇕</div>
+              </div>
+              <button class="thumb-button"></button>
+          </div>
+
+          <div class="row">
+              <label class="sub-label">Scatter anisotropy:</label>
+              <div class="input-container">
+              <input id="scatter-anisotropy" type="number" value="0" step="1">
+              <div class="drag-handle">⇕</div>
+              </div>
+              <button class="thumb-button"></button>
+          </div>
+
+        <div class="row">
+            <label class="sub-label">Dispersion scale:</label>
+            <div class="input-container">
+             <input id="dispersion-scale" type="number" value="0" step="1">
+                <div class="drag-handle">⇕</div>
+            </div>
+            <button class="thumb-button"></button>
+        </div>
+
+        <div class="row">
+            <label class="sub-label">Abbe:</label>
+            <div class="input-container">
+            <input id="abbe" type="number" value="0" step="1">
+            <div class="drag-handle">⇕</div>
+            </div>
+            <button class="thumb-button"></button>
+        </div>
+      <!--
+        You can continue adding more rows, following exactly the same patterns:
+        - For any “<Something> weight:”, use the .input-container + <input type="number"> + .drag-handle combo.
+        - For any “<Something>:” that you want as a color swatch, use the <input type="color"> (flex:1) + <button class="thumb-button">.
+        - If a row needs both a wide input and a thumbnail, put the input inside .input-container (or just the color input with flex:1) and then the <button class="thumb-button">.
+      -->
+    </div>
+  </div>
+
+  <script src="pbr.js"></script>
+
+  
+</body>
+</html>

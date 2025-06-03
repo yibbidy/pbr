@@ -1,0 +1,377 @@
+﻿/* file pbr.css */
+#left-container {
+	position: fixed;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	width: 200px; /* Adjust if you want a different width */
+	display: flex;
+	flex-direction: column;
+	background: #e0e0e0; /* Light gray background behind everything */
+	box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+	z-index: 1000; /* Above the scene but behind the right palette */
+	font-family: Arial, sans-serif;
+}
+
+#actions-palette {
+	/* no position: fixed here anymore, since #left-container is fixed */
+	background: #e0e0e0;
+	border-bottom: 1px solid #ccc;
+}
+
+	#actions-palette .header {
+		padding: 12px;
+		background: #ccc;
+		font-weight: bold;
+		text-align: center;
+		border-bottom: 1px solid #bbb;
+	}
+
+	#actions-palette .action-row {
+		padding: 8px 10px;
+		border-bottom: 1px solid #ddd;
+	}
+
+		#actions-palette .action-row button {
+			width: 100%;
+			padding: 8px;
+			font-size: 14px;
+			background: #fff;
+			border: 1px solid #aaa;
+			cursor: pointer;
+			box-sizing: border-box;
+		}
+
+			#actions-palette .action-row button:hover,
+			#actions-palette .action-row button:focus {
+				background: #f5f5f5;
+				border-color: #888;
+			}
+
+#textures-palette {
+	display: flex;
+	flex-direction: column;
+	flex: 1; /* fill all height left over by #actions-palette */
+	background: #dddddd;
+	border-top: 1px solid #bbb;
+	overflow: hidden; /* contain children; grid will scroll */
+}
+
+	/* Header bar for “Textures” */
+	#textures-palette .header {
+		padding: 12px;
+		background: #ccc;
+		font-weight: bold;
+		text-align: center;
+		border-bottom: 1px solid #bbb;
+	}
+
+/* Container for the actual grid of thumbnails */
+#texture-grid {
+	flex: 1;
+	padding: 8px;
+	display: flex;
+	flex-wrap: wrap;
+	align-content: flex-start; /* items flow top→bottom, left→right */
+	overflow-y: auto; /* scroll if too many items */
+	gap: 8px; /* space between items horizontally/vertically */
+	box-sizing: border-box;
+	background: #e8e8e8;
+}
+
+/* Each texture item: padding + centered content */
+.texture-item {
+	background: transparent;
+	padding: 4px; /* padding inside the item */
+	box-sizing: border-box;
+	width: auto; /* auto expand to fit content + padding */
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+	/* Highlight the currently active texture‐item */
+	.texture-item.active {
+		background: rgba(0, 0, 255, 0.2); /* translucent blue */
+		border-radius: 8px;
+	}
+
+/* The colored rectangle (thumbnail placeholder) */
+.texture-thumb {
+	width: 80px;
+	height: 80px;
+	background: #bbb; /* default placeholder color */
+	border: 1px solid #999;
+	box-sizing: border-box;
+}
+
+/* The name field, below the rectangle, centered text */
+.texture-name {
+	margin-top: 4px;
+	width: 80px;
+	box-sizing: border-box;
+	text-align: center;
+	font-size: 12px;
+	padding: 2px;
+	border: 1px solid #999;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+}
+
+/* Right palette container */
+#palette {
+	position: fixed;
+	top: 0;
+	right: 0;
+	width: 300px;
+	height: 100%;
+	background: #f0f0f0;
+	border-left: 1px solid #ccc;
+	box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+	font-family: Arial, sans-serif;
+	display: flex;
+	flex-direction: column;
+}
+
+	/* Header bar (collapse/expand) */
+	#palette .header {
+		padding: 10px;
+		background: #ddd;
+		cursor: pointer;
+		user-select: none;
+		display: flex;
+		align-items: center;
+	}
+
+		#palette .header .toggle {
+			display: inline-block;
+			margin-right: 5px;
+			transition: transform 0.2s ease;
+		}
+
+	#palette.collapsed .header .toggle {
+		transform: rotate(-90deg);
+	}
+
+	#palette.collapsed .content {
+		display: none;
+	}
+
+	/* Scrollable content area */
+	#palette .content {
+		flex: 1;
+		overflow-y: auto;
+	}
+
+	/* Each row in the right palette */
+	#palette .row {
+		display: flex;
+		align-items: center;
+		padding: 5px 10px;
+		border-bottom: 1px solid #e0e0e0;
+	}
+
+		#palette .row:last-child {
+			border-bottom: none;
+		}
+
+		#palette .row label {
+			width: 120px;
+			font-size: 14px;
+			white-space: nowrap;
+		}
+
+		#palette .row .sub-label {
+			margin-left: 15px;
+			width: 105px;
+		}
+
+	/* Number‐input + drag‐handle */
+	#palette .input-container {
+		position: relative;
+		flex: 1;
+	}
+
+		#palette .input-container input[type="number"] {
+			width: 100%;
+			padding-right: 16px;
+			box-sizing: border-box;
+			font-size: 14px;
+		}
+
+			#palette .input-container input[type="number"]::-webkit-inner-spin-button,
+			#palette .input-container input[type="number"]::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+
+	#palette .drag-handle {
+		position: absolute;
+		top: 0;
+		right: 0;
+		width: 16px;
+		height: 100%;
+		cursor: ns-resize;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		color: #666;
+		font-size: 12px;
+		user-select: none;
+	}
+
+		#palette .drag-handle:hover {
+			background: rgba(0,0,0,0.05);
+		}
+
+	/* Color inputs */
+	#palette .row input[type="color"] {
+		flex: 1;
+		height: 28px;
+		border: none;
+		padding: 0;
+		margin: 0;
+		cursor: pointer;
+	}
+
+	#palette .thumb-button {
+		width: 24px;
+		height: 24px;
+		background: #ccc;
+		border: 1px solid #999;
+		margin-left: 8px;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+/* Container that sits between left & right palettes */
+#scene-container {
+	position: absolute;
+	top: 0;
+	left: 200px; /* = width of #left-container */
+	right: 300px; /* = width of #palette */
+	bottom: 0;
+	box-sizing: border-box;
+	overflow: visible;
+	z-index: 0; /* Behind everything else */
+}
+
+/* The actual SVG area (fills the container) */
+#scene {
+	width: 100%;
+	height: 100%;
+}
+
+/* ------------------------------------------
+   Orange 50% border around SVG in “create” context
+   ------------------------------------------ */
+#create-texture-border {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	border: 4px solid rgba(255,165,0,0.5); /* orange, 50% */
+	pointer-events: none; /* clicks pass through border */
+	display: none; /* hidden by default */
+	box-sizing: border-box;
+}
+
+/* ------------------------------------------
+   Overlay controls for “create texture” context
+   ------------------------------------------ */
+#texture-create-controls {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	display: none; /* hidden by default */
+	z-index: 10;
+	gap: 8px;
+}
+
+	/* Preferences button (semi‐transparent gray circle with gear) */
+	#texture-create-controls .prefs-button {
+		width: 30px;
+		height: 30px;
+		background: rgba(128,128,128,0.5);
+		border: none;
+		border-radius: 50%;
+		color: #fff;
+		font-size: 18px;
+		line-height: 1;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	/* Done button (opaque orange rounded rectangle) */
+	#texture-create-controls .done-button {
+		background: rgba(255,165,0,0.9);
+		border: none;
+		color: black;
+		font-size: 14px;
+		padding: 6px 12px;
+		border-radius: 15px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+#texture-prefs-popover .arrow-border {
+	position: absolute;
+	width: 0;
+	height: 0;
+	border-left: 9px solid transparent;
+	border-right: 9px solid transparent;
+	border-bottom: 9px solid #000; /* black border */
+	top: -9px; /* sit 1px above the fill arrow */
+	left: calc(50% - 9px);
+}
+
+#texture-prefs-popover .arrow-fill {
+	position: absolute;
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+	border-bottom: 8px solid #fff; /* white fill */
+	top: -8px; /* sits 1px below the border triangle */
+	left: calc(50% - 8px);
+}
+
+/* ===========================
+   Popover arrow (outer border)
+   =========================== */
+.img-arrow-border {
+	position: absolute;
+	/* make a right‐pointing triangle in the border’s color (#888 matches popover’s border) */
+	border-top: 8px solid transparent;
+	border-bottom: 8px solid transparent;
+	border-left: 9px solid #888; /* same color as popover’s border */
+	right: -9px; /* place it just outside the popover’s right edge */
+	top: calc(50% - 8px); /* vertically center it (half of 16px total height) */
+	width: 0;
+	height: 0;
+}
+
+/* ===========================
+   Popover arrow (inner fill)
+   =========================== */
+.img-arrow-fill {
+	position: absolute;
+	/* a slightly smaller white triangle, so it “sits inside” the border triangle */
+	border-top: 7px solid transparent;
+	border-bottom: 7px solid transparent;
+	border-left: 8px solid #fff; /* same white as popover background */
+	right: -8px; /* matches border’s inset by 1px */
+	top: calc(50% - 7px); /* vertically center inside the border triangle */
+	width: 0;
+	height: 0;
+}
+
+/* End of pbr.css */

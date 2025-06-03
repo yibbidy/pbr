@@ -1,0 +1,1418 @@
+﻿/***********************************************************
+  pbr.js
+  - Persistent texture definitions
+  - Active‐texture tracking
+  - Multiple scene objects, live updates on texture change
+  - Thicker create-texture border
+  - Placeholder uses current texture fill
+  - Popover for settings button
+  - Click object to select its texture
+  - Ruler marks and print box behind all objects
+  - Image import popover for color & numeric fields
+  - SVG background set to rgb(249,249,240)
+  - + Gray‐out labels when inputs are disabled
+  - + Hide subordinate rows whenever weight === 0
+************************************************************/
+
+// ------------------------
+// Global Data Structures
+// ------------------------
+
+let textures = [];
+let currentTextureIndex = null;
+let inCreateTextureContext = false;
+let hiddenShapes = [];
+let createTextureShape = null;
+let textureCount = 0;
+
+let sceneObjects = [];
+
+let prefsPopover = null;
+let imgImportPopover = null;
+let imgImportField = null;
+
+// ----------------------------------------------
+// Utility: Convert hex color → {r,g,b}
+// ----------------------------------------------
+function hexToRgb(hex) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+    const intVal = parseInt(hex, 16);
+    return {
+        r: (intVal >> 16) & 0xFF,
+        g: (intVal >> 8) & 0xFF,
+        b: (intVal >> 0) & 0xFF
+    };
+}
+
+// ----------------------------------------------
+// Utility: Convert {r,g,b} → "#RRGGBB"
+// ----------------------------------------------
+function rgbToHex(r, g, b) {
+    function to2digit(n) {
+        const s = Math.round(n).toString(16);
+        return s.length < 2 ? '0' + s : s;
+    }
+    return '#' + to2digit(r) + to2digit(g) + to2digit(b);
+}
+
+// --------------------------------------------------------------
+// Update thumbnail of texture #idx in left palette
+// --------------------------------------------------------------
+function updateTextureThumbnail(idx) {
+    const def = textures[idx];
+    const itemDiv = document.querySelector(`.texture-item[data-texture-index="${idx}"]`);
+    if (!itemDiv) return;
+    const thumbDiv = itemDiv.querySelector('.texture-thumb');
+
+    const bw = def.baseWeight / 100;
+    const sw = def.specWeight / 100;
+    const tw = def.transWeight / 100;
+    const bc = hexToRgb(def.baseColor);
+    const sc = hexToRgb(def.specColor);
+    const tc = hexToRgb(def.transColor);
+
+    let r = bw * bc.r + sw * sc.r + tw * tc.r;
+    let g = bw * bc.g + sw * sc.g + tw * tc.g;
+    let b = bw * bc.b + sw * sc.b + tw * tc.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+    const fillHex = rgbToHex(r, g, b);
+
+    thumbDiv.style.backgroundImage = '';
+    thumbDiv.style.backgroundColor = fillHex;
+}
+
+// ------------------------------------------------------------------------
+// Load texture #idx into the "Edit Texture" palette (right side)
+// ------------------------------------------------------------------------
+function loadTextureIntoEditor(idx) {
+    const def = textures[idx];
+    if (!def) return;
+
+    // — base‐color —
+    const baseWeightEl = document.getElementById('base-weight');
+    const baseColorEl = document.getElementById('base-color');
+    baseWeightEl.value = def.baseWeight;
+    baseColorEl.value = def.baseColor;
+    baseColorEl.disabled = def.baseColorUseImage;
+    grayOutLabelAndHandle(baseColorEl, def.baseColorUseImage);
+
+    const baseThumb = baseColorEl.closest('.row').querySelector('.thumb-button');
+    if (def.baseColorUseImage && def.baseColorImgDataUrl) {
+        baseThumb.style.backgroundImage = `url(${def.baseColorImgDataUrl})`;
+        baseThumb.style.backgroundSize = 'cover';
+        baseThumb.style.backgroundColor = 'transparent';
+    } else {
+        baseThumb.style.backgroundImage = '';
+        baseThumb.style.backgroundColor = '#ccc';
+    }
+
+    // — specular‐color —
+    const specWeightEl = document.getElementById('spec-weight');
+    const specColorEl = document.getElementById('spec-color');
+    specWeightEl.value = def.specWeight;
+    specColorEl.value = def.specColor;
+    specColorEl.disabled = def.specColorUseImage;
+    grayOutLabelAndHandle(specColorEl, def.specColorUseImage);
+
+    const specThumb = specColorEl.closest('.row').querySelector('.thumb-button');
+    if (def.specColorUseImage && def.specColorImgDataUrl) {
+        specThumb.style.backgroundImage = `url(${def.specColorImgDataUrl})`;
+        specThumb.style.backgroundSize = 'cover';
+        specThumb.style.backgroundColor = 'transparent';
+    } else {
+        specThumb.style.backgroundImage = '';
+        specThumb.style.backgroundColor = '#ccc';
+    }
+
+    // — transmission‐color —
+    const transWeightEl = document.getElementById('trans-weight');
+    const transColorEl = document.getElementById('trans-color');
+    transWeightEl.value = def.transWeight;
+    transColorEl.value = def.transColor;
+    transColorEl.disabled = def.transColorUseImage;
+    grayOutLabelAndHandle(transColorEl, def.transColorUseImage);
+
+    const transThumb = transColorEl.closest('.row').querySelector('.thumb-button');
+    if (def.transColorUseImage && def.transColorImgDataUrl) {
+        transThumb.style.backgroundImage = `url(${def.transColorImgDataUrl})`;
+        transThumb.style.backgroundSize = 'cover';
+        transThumb.style.backgroundColor = 'transparent';
+    } else {
+        transThumb.style.backgroundImage = '';
+        transThumb.style.backgroundColor = '#ccc';
+    }
+
+    // — NEW: metalness —
+    const metalEl = document.getElementById('metalness');
+    if (metalEl) {
+        metalEl.value = def.metalness;
+        metalEl.disabled = def.metalnessUseImage;
+        grayOutLabelAndHandle(metalEl, def.metalnessUseImage);
+        const metalThumb = metalEl.closest('.row').querySelector('.thumb-button');
+        if (metalThumb) {
+            if (def.metalnessUseImage && def.metalnessImgDataUrl) {
+                metalThumb.style.backgroundImage = `url(${def.metalnessImgDataUrl})`;
+                metalThumb.style.backgroundSize = 'cover';
+                metalThumb.style.backgroundColor = 'transparent';
+            } else {
+                metalThumb.style.backgroundImage = '';
+                metalThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: roughness —
+    const roughEl = document.getElementById('diffuse-roughness');
+    if (roughEl) {
+        roughEl.value = def.diffuseRoughness;
+        roughEl.disabled = def.diffuseRoughnessUseImage;
+        grayOutLabelAndHandle(roughEl, def.diffuseRoughnessUseImage);
+        const roughThumb = roughEl.closest('.row').querySelector('.thumb-button');
+        if (roughThumb) {
+            if (def.diffuseRoughnessUseImage && def.diffuseRoughnessImgDataUrl) {
+                roughThumb.style.backgroundImage = `url(${def.diffuseRoughnessImgDataUrl})`;
+                roughThumb.style.backgroundSize = 'cover';
+                roughThumb.style.backgroundColor = 'transparent';
+            } else {
+                roughThumb.style.backgroundImage = '';
+                roughThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    const specRoughEl = document.getElementById('spec-roughness');
+    if (specRoughEl) {
+        specRoughEl.value = def.specRoughness;
+        specRoughEl.disabled = def.specRoughnessUseImage;
+        grayOutLabelAndHandle(specRoughEl, def.specRoughnessUseImage);
+        const roughThumb = specRoughEl.closest('.row').querySelector('.thumb-button');
+        if (roughThumb) {
+            if (def.specRoughnessUseImage && def.specRoughnessImgDataUrl) {
+                roughThumb.style.backgroundImage = `url(${def.specRoughnessImgDataUrl})`;
+                roughThumb.style.backgroundSize = 'cover';
+                roughThumb.style.backgroundColor = 'transparent';
+            } else {
+                roughThumb.style.backgroundImage = '';
+                roughThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: roughness-anisotropy —
+    const roughAniEl = document.getElementById('roughness-anisotropy');
+    if (roughAniEl) {
+        roughAniEl.value = def.roughnessAnisotropy;
+        roughAniEl.disabled = def.roughnessAnisotropyUseImage;
+        grayOutLabelAndHandle(roughAniEl, def.roughnessAnisotropyUseImage);
+        const roughAniThumb = roughAniEl.closest('.row').querySelector('.thumb-button');
+        if (roughAniThumb) {
+            if (def.roughnessAnisotropyUseImage && def.roughnessAnisotropyImgDataUrl) {
+                roughAniThumb.style.backgroundImage = `url(${def.roughnessAnisotropyImgDataUrl})`;
+                roughAniThumb.style.backgroundSize = 'cover';
+                roughAniThumb.style.backgroundColor = 'transparent';
+            } else {
+                roughAniThumb.style.backgroundImage = '';
+                roughAniThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: ior —
+    const iorEl = document.getElementById('ior');
+    if (iorEl) {
+        iorEl.value = def.ior;
+        iorEl.disabled = def.iorUseImage;
+        grayOutLabelAndHandle(iorEl, def.iorUseImage);
+        const iorThumb = iorEl.closest('.row').querySelector('.thumb-button');
+        if (iorThumb) {
+            if (def.iorUseImage && def.iorImgDataUrl) {
+                iorThumb.style.backgroundImage = `url(${def.iorImgDataUrl})`;
+                iorThumb.style.backgroundSize = 'cover';
+                iorThumb.style.backgroundColor = 'transparent';
+            } else {
+                iorThumb.style.backgroundImage = '';
+                iorThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: depth —
+    const depthEl = document.getElementById('depth');
+    if (depthEl) {
+        depthEl.value = def.depth;
+        depthEl.disabled = def.depthUseImage;
+        grayOutLabelAndHandle(depthEl, def.depthUseImage);
+        const depthThumb = depthEl.closest('.row').querySelector('.thumb-button');
+        if (depthThumb) {
+            if (def.depthUseImage && def.depthImgDataUrl) {
+                depthThumb.style.backgroundImage = `url(${def.depthImgDataUrl})`;
+                depthThumb.style.backgroundSize = 'cover';
+                depthThumb.style.backgroundColor = 'transparent';
+            } else {
+                depthThumb.style.backgroundImage = '';
+                depthThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: scatter —
+    const scatterEl = document.getElementById('scatter');
+    if (scatterEl) {
+        scatterEl.value = def.scatter;
+        scatterEl.disabled = def.scatterUseImage;
+        grayOutLabelAndHandle(scatterEl, def.scatterUseImage);
+        const scatterThumb = scatterEl.closest('.row').querySelector('.thumb-button');
+        if (scatterThumb) {
+            if (def.scatterUseImage && def.scatterImgDataUrl) {
+                scatterThumb.style.backgroundImage = `url(${def.scatterImgDataUrl})`;
+                scatterThumb.style.backgroundSize = 'cover';
+                scatterThumb.style.backgroundColor = 'transparent';
+            } else {
+                scatterThumb.style.backgroundImage = '';
+                scatterThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: scatter-anisotropy —
+    const scatterAniEl = document.getElementById('scatter-anisotropy');
+    if (scatterAniEl) {
+        scatterAniEl.value = def.scatterAnisotropy;
+        scatterAniEl.disabled = def.scatterAnisotropyUseImage;
+        grayOutLabelAndHandle(scatterAniEl, def.scatterAnisotropyUseImage);
+        const scatterAniThumb = scatterAniEl.closest('.row').querySelector('.thumb-button');
+        if (scatterAniThumb) {
+            if (def.scatterAnisotropyUseImage && def.scatterAnisotropyImgDataUrl) {
+                scatterAniThumb.style.backgroundImage = `url(${def.scatterAnisotropyImgDataUrl})`;
+                scatterAniThumb.style.backgroundSize = 'cover';
+                scatterAniThumb.style.backgroundColor = 'transparent';
+            } else {
+                scatterAniThumb.style.backgroundImage = '';
+                scatterAniThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: dispersion-scale —
+    const dispEl = document.getElementById('dispersion-scale');
+    if (dispEl) {
+        dispEl.value = def.dispersionScale;
+        dispEl.disabled = def.dispersionScaleUseImage;
+        grayOutLabelAndHandle(dispEl, def.dispersionScaleUseImage);
+        const dispThumb = dispEl.closest('.row').querySelector('.thumb-button');
+        if (dispThumb) {
+            if (def.dispersionScaleUseImage && def.dispersionScaleImgDataUrl) {
+                dispThumb.style.backgroundImage = `url(${def.dispersionScaleImgDataUrl})`;
+                dispThumb.style.backgroundSize = 'cover';
+                dispThumb.style.backgroundColor = 'transparent';
+            } else {
+                dispThumb.style.backgroundImage = '';
+                dispThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // — NEW: abbe —
+    const abbeEl = document.getElementById('abbe');
+    if (abbeEl) {
+        abbeEl.value = def.abbe;
+        abbeEl.disabled = def.abbeUseImage;
+        grayOutLabelAndHandle(abbeEl, def.abbeUseImage);
+        const abbeThumb = abbeEl.closest('.row').querySelector('.thumb-button');
+        if (abbeThumb) {
+            if (def.abbeUseImage && def.abbeImgDataUrl) {
+                abbeThumb.style.backgroundImage = `url(${def.abbeImgDataUrl})`;
+                abbeThumb.style.backgroundSize = 'cover';
+                abbeThumb.style.backgroundColor = 'transparent';
+            } else {
+                abbeThumb.style.backgroundImage = '';
+                abbeThumb.style.backgroundColor = '#ccc';
+            }
+        }
+    }
+
+    // → After setting any weight, we also need to hide subordinate rows if weight === 0
+    toggleSpecRows();
+    toggleTransRows();
+}
+
+// ----------------------------------------------------------------------
+// Gray‐out the <label> and disable the drag-handle if `disabled===true`.
+// ----------------------------------------------------------------------
+function grayOutLabelAndHandle(inputEl, disabled) {
+    const row = inputEl.closest('.row');
+    if (!row) return;
+    const label = row.querySelector('label');
+    if (label) {
+        label.style.color = disabled ? '#888' : '';
+    }
+    // If there is a drag-handle in this row, disable/gray it
+    const dragHandle = row.querySelector('.drag-handle');
+    if (dragHandle) {
+        if (disabled) {
+            dragHandle.style.pointerEvents = 'none';
+            dragHandle.style.color = '#aaa';
+        } else {
+            dragHandle.style.pointerEvents = '';
+            dragHandle.style.color = '';
+        }
+    }
+    // Also reduce opacity of the input itself if disabled
+    inputEl.style.opacity = disabled ? '0.5' : '';
+}
+
+// ----------------------------------------------------------------------
+// Mark a texture #idx as active, update right palette, etc.
+// ----------------------------------------------------------------------
+function selectTexture(idx) {
+    if (currentTextureIndex == idx) return;
+
+    if (inCreateTextureContext) {
+        exitCreateTextureContext();
+    }
+    if (currentTextureIndex !== null) {
+        const prevItem = document.querySelector(`.texture-item[data-texture-index="${currentTextureIndex}"]`);
+        if (prevItem) prevItem.classList.remove('active');
+    }
+    currentTextureIndex = idx;
+    const newItem = document.querySelector(`.texture-item[data-texture-index="${idx}"]`);
+    if (newItem) newItem.classList.add('active');
+    loadTextureIntoEditor(idx);
+}
+
+// ----------------------------------------------------------------
+// Add one texture entry to the left “Textures” palette
+// ----------------------------------------------------------------
+function addTextureToList(def, idx) {
+    const grid = document.getElementById('texture-grid');
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'texture-item';
+    itemDiv.dataset.textureIndex = idx;
+    itemDiv.style.display = 'flex';
+    itemDiv.style.flexDirection = 'column';
+    itemDiv.style.alignItems = 'center';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'texture-thumb';
+    thumb.style.width = '80px';
+    thumb.style.height = '80px';
+    thumb.style.background = '#bbb';
+    thumb.style.border = '1px solid #999';
+    thumb.style.boxSizing = 'border-box';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'texture-name';
+    nameInput.value = def.name;
+    nameInput.dataset.textureIndex = idx;
+    nameInput.style.marginTop = '4px';
+    nameInput.style.width = '80px';
+    nameInput.style.boxSizing = 'border-box';
+    nameInput.style.textAlign = 'center';
+    nameInput.style.fontSize = '12px';
+    nameInput.style.padding = '2px';
+    nameInput.style.border = '1px solid #999';
+
+    itemDiv.appendChild(thumb);
+    itemDiv.appendChild(nameInput);
+    grid.appendChild(itemDiv);
+
+    updateTextureThumbnail(idx);
+    itemDiv.addEventListener('click', () => selectTexture(idx));
+    nameInput.addEventListener('change', (e) => {
+        const val = e.target.value.trim();
+        if (val.length > 0) textures[idx].name = val;
+        else e.target.value = textures[idx].name;
+    });
+    //nameInput.focus();
+    nameInput.select();
+}
+
+// ----------------------------------------------------------------
+// Write right‐palette fields into textures[currentTextureIndex],
+// then update thumbnail & all objects using it.
+// ----------------------------------------------------------------
+function writeInputsIntoCurrentTexture() {
+    if (currentTextureIndex === null) return;
+    const def = textures[currentTextureIndex];
+
+    // — base & spec & trans (unchanged) —
+    def.baseWeight = parseFloat(document.getElementById('base-weight').value) || 0;
+    def.baseColor = document.getElementById('base-color').value || '#000000';
+    def.specWeight = parseFloat(document.getElementById('spec-weight').value) || 0;
+    def.specColor = document.getElementById('spec-color').value || '#000000';
+    def.transWeight = parseFloat(document.getElementById('trans-weight').value) || 0;
+    def.transColor = document.getElementById('trans-color').value || '#000000';
+
+    // If user picked a new file in “base-image-file,” read it (unchanged)
+    const baseImgInput = document.getElementById('base-image-file');
+    if (baseImgInput && baseImgInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+            def.baseColorUseImage = true;
+            def.baseColorImgDataUrl = ev.target.result;
+            updateTextureThumbnail(currentTextureIndex);
+            updateAllObjectsForTexture(currentTextureIndex);
+            loadTextureIntoEditor(currentTextureIndex);
+            updateImgImportControls();
+        };
+        reader.readAsDataURL(baseImgInput.files[0]);
+    }
+    
+    // — NEW: metalness field —
+    const metalEl = document.getElementById('metalness');
+    if (metalEl) def.metalness = parseFloat(metalEl.value) || 0;
+    def.metalnessUseImage = def.metalnessUseImage || false;
+
+    // — NEW: roughness field —
+    const roughEl = document.getElementById('diffuse-roughness');
+    if (roughEl) def.diffuseRoughness = parseFloat(roughEl.value) || 0;
+    def.diffuseRoughnessUseImage = def.diffuseRoughnessUseImage || false;
+
+    // — NEW: roughness field —
+    const specRoughEl = document.getElementById('spec-roughness');
+    if (specRoughEl) def.specRoughness = parseFloat(specRoughEl.value) || 0;
+    def.specRoughnessUseImage = def.specRoughnessUseImage || false;
+
+    // — NEW: roughness-anisotropy field —
+    const roughAniEl = document.getElementById('roughness-anisotropy');
+    if (roughAniEl) def.roughnessAnisotropy = parseFloat(roughAniEl.value) || 0;
+    def.roughnessAnisotropyUseImage = def.roughnessAnisotropyUseImage || false;
+
+    // — NEW: ior field —
+    const iorEl = document.getElementById('ior');
+    if (iorEl) def.ior = parseFloat(iorEl.value) || 1.5;
+    def.iorUseImage = def.iorUseImage || false;
+
+    // — NEW: depth field —
+    const depthEl = document.getElementById('depth');
+    if (depthEl) def.depth = parseFloat(depthEl.value) || 0;
+    def.depthUseImage = def.depthUseImage || false;
+
+    // — NEW: scatter field —
+    const scatterEl = document.getElementById('scatter');
+    if (scatterEl) def.scatter = parseFloat(scatterEl.value) || 0;
+    def.scatterUseImage = def.scatterUseImage || false;
+
+    // — NEW: scatter-anisotropy field —
+    const scatterAniEl = document.getElementById('scatter-anisotropy');
+    if (scatterAniEl) def.scatterAnisotropy = parseFloat(scatterAniEl.value) || 0;
+    def.scatterAnisotropyUseImage = def.scatterAnisotropyUseImage || false;
+
+    // — NEW: dispersion-scale field —
+    const dispEl = document.getElementById('dispersion-scale');
+    if (dispEl) def.dispersionScale = parseFloat(dispEl.value) || 0;
+    def.dispersionScaleUseImage = def.dispersionScaleUseImage || false;
+
+    // — NEW: abbe field —
+    const abbeEl = document.getElementById('abbe');
+    if (abbeEl) def.abbe = parseFloat(abbeEl.value) || 0;
+    def.abbeUseImage = def.abbeUseImage || false;
+
+    updateTextureThumbnail(currentTextureIndex);
+    updateAllObjectsForTexture(currentTextureIndex);
+    loadTextureIntoEditor(currentTextureIndex);
+    updateImgImportControls();
+}
+
+// ----------------------------------------------------------
+// Create a new texture
+// ----------------------------------------------------------
+function createNewTexture() {
+    textureCount += 1;
+    const defaultName = 'Texture-' + textureCount;
+
+    // Include UseImage flags + ImgDataUrl for every field
+    const newDef = {
+        id: textureCount,
+        name: defaultName,
+
+        baseWeight: 50,
+        baseColor: '#ff0000',
+        baseColorUseImage: false,
+        baseColorImgDataUrl: '',
+
+        specWeight: 0,
+        specColor: '#777777',
+        specColorUseImage: false,
+        specColorImgDataUrl: null,
+
+        transWeight: 0,
+        transColor: '#777777',
+        transColorUseImage: false,
+        transColorImgDataUrl: null,
+
+        metalness: 0,
+        metalnessUseImage: false,
+        metalnessImgDataUrl: null,
+
+        diffuseRoughness: 0,
+        diffuseRoughnessUseImage: false,
+        diffuseRoughnessImgDataUrl: null,
+
+        specRoughness: 0,
+        specRoughnessUseImage: false,
+        specRoughnessImgDataUrl: null,
+
+        roughnessAnisotropy: 0,
+        roughnessAnisotropyUseImage: false,
+        roughnessAnisotropyImgDataUrl: null,
+
+        ior: 1.5,
+        iorUseImage: false,
+        iorImgDataUrl: null,
+
+        depth: 0,
+        depthUseImage: false,
+        depthImgDataUrl: null,
+
+        scatter: 0,
+        scatterUseImage: false,
+        scatterImgDataUrl: null,
+
+        scatterAnisotropy: 0,
+        scatterAnisotropyUseImage: false,
+        scatterAnisotropyImgDataUrl: null,
+
+        dispersionScale: 0,
+        dispersionScaleUseImage: false,
+        dispersionScaleImgDataUrl: null,
+
+        abbe: 0,
+        abbeUseImage: false,
+        abbeImgDataUrl: null,
+
+        metalnessImg: null,
+        diffuseRoughnessImg: null,
+        specRoughnessImg: null,
+        iorImg: null,
+        depthImg: null,
+        scatterImg: null,
+        dispersionImg: null,
+        abbeImg: null
+    };
+
+    const newIndex = textures.length;
+    textures.push(newDef);
+    addTextureToList(newDef, newIndex);
+    selectTexture(newIndex);
+    enterCreateTextureContext();
+}
+
+// ----------------------------------------------
+// Enter "create texture" context
+// ----------------------------------------------
+function enterCreateTextureContext() {
+    if (inCreateTextureContext) return;
+    inCreateTextureContext = true;
+
+    const svg = document.getElementById('scene');
+    if (!svg) return;
+
+    hiddenShapes = [];
+    Array.from(svg.children).forEach(child => {
+        hiddenShapes.push(child);
+        child.style.display = 'none';
+    });
+
+    const bbox = svg.getBoundingClientRect();
+    const sceneW = bbox.width, sceneH = bbox.height;
+    const w = sceneW * 0.6;
+    const h = sceneH * 0.6;
+    const x = (sceneW - w) / 2;
+    const y = (sceneH - h) / 2;
+    const rad = 0.1 * Math.min(w, h);
+
+    createTextureShape = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    createTextureShape.setAttribute("x", x);
+    createTextureShape.setAttribute("y", y);
+    createTextureShape.setAttribute("width", w);
+    createTextureShape.setAttribute("height", h);
+    createTextureShape.setAttribute("rx", rad);
+    createTextureShape.setAttribute("ry", rad);
+
+    if (currentTextureIndex !== null) {
+        const def = textures[currentTextureIndex];
+        const bw = def.baseWeight / 100;
+        const sw = def.specWeight / 100;
+        const tw = def.transWeight / 100;
+        const bc = hexToRgb(def.baseColor);
+        const sc = hexToRgb(def.specColor);
+        const tc = hexToRgb(def.transColor);
+
+        let r = bw * bc.r + sw * sc.r + tw * tc.r;
+        let g = bw * bc.g + sw * sc.g + tw * tc.g;
+        let b = bw * bc.b + sw * sc.b + tw * tc.b;
+        r = Math.round(Math.min(Math.max(r, 0), 255));
+        g = Math.round(Math.min(Math.max(g, 0), 255));
+        b = Math.round(Math.min(Math.max(b, 0), 255));
+        const fillHex = rgbToHex(r, g, b);
+        createTextureShape.setAttribute("fill", fillHex);
+    } else {
+        createTextureShape.setAttribute("fill", "#ffffff");
+    }
+    createTextureShape.setAttribute("stroke", "#000000");
+    createTextureShape.setAttribute("stroke-width", "1");
+    svg.appendChild(createTextureShape);
+
+    document.getElementById('create-texture-border').style.border = '25px solid rgba(255,165,0,0.5)';
+    document.getElementById('create-texture-border').style.display = 'block';
+    document.getElementById('texture-create-controls').style.display = 'flex';
+
+    document.getElementById('btn-create-object').disabled = true;
+}
+
+// ----------------------------------------------
+// Exit "create texture" context
+// ----------------------------------------------
+function exitCreateTextureContext() {
+    if (!inCreateTextureContext) return;
+    inCreateTextureContext = false;
+
+    const svg = document.getElementById('scene');
+    if (!svg) return;
+
+    writeInputsIntoCurrentTexture();
+    if (createTextureShape) {
+        svg.removeChild(createTextureShape);
+        createTextureShape = null;
+    }
+    hiddenShapes.forEach(child => child.style.display = '');
+    hiddenShapes = [];
+    document.getElementById('create-texture-border').style.display = 'none';
+    document.getElementById('texture-create-controls').style.display = 'none';
+
+    document.getElementById('btn-create-object').disabled = false;
+}
+
+// ---------------------------------------------------------
+// Update all SVG objects that use texture #idx
+// ---------------------------------------------------------
+function updateAllObjectsForTexture(idx) {
+    const def = textures[idx];
+    if (!def) return;
+
+    const bw = def.baseWeight / 100;
+    const sw = def.specWeight / 100;
+    const tw = def.transWeight / 100;
+    const bc = hexToRgb(def.baseColor);
+    const sc = hexToRgb(def.specColor);
+    const tc = hexToRgb(def.transColor);
+
+    let r = bw * bc.r + sw * sc.r + tw * tc.r;
+    let g = bw * bc.g + sw * sc.g + tw * tc.g;
+    let b = bw * bc.b + sw * sc.b + tw * tc.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+    const fillHex = rgbToHex(r, g, b);
+
+    sceneObjects.forEach(obj => {
+        if (obj.textureIndex === idx) {
+            obj.el.setAttribute('fill', fillHex);
+        }
+    });
+    if (createTextureShape) {
+        createTextureShape.setAttribute("fill", fillHex);
+    }
+}
+
+// ------------------------------------------------------
+// Draw a new SVG object using the current texture
+// ------------------------------------------------------
+function drawRandomShape() {
+    if (inCreateTextureContext) exitCreateTextureContext();
+
+    const svg = document.getElementById('scene');
+    if (!svg) {
+        console.warn("No #scene element found in DOM.");
+        return;
+    }
+    if (currentTextureIndex === null) {
+        alert("Please select or create a texture first.");
+        return;
+    }
+
+    const def = textures[currentTextureIndex];
+    const bw = def.baseWeight / 100;
+    const sw = def.specWeight / 100;
+    const tw = def.transWeight / 100;
+    const bc = hexToRgb(def.baseColor);
+    const sc = hexToRgb(def.specColor);
+    const tc = hexToRgb(def.transColor);
+
+    let r = bw * bc.r + sw * sc.r + tw * tc.r;
+    let g = bw * bc.g + sw * sc.g + tw * tc.g;
+    let b = bw * bc.b + sw * sc.b + tw * tc.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+    const fillHex = rgbToHex(r, g, b);
+
+    const shapeTypes = ['circle', 'rect', 'rounded-rect', 'ellipse'];
+    const choice = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
+    const bbox = svg.getBoundingClientRect();
+    const sceneW = bbox.width, sceneH = bbox.height;
+    const minSize = 30, maxSize = 150;
+    const w = minSize + Math.random() * (maxSize - minSize);
+    const h = minSize + Math.random() * (maxSize - minSize);
+    const x = Math.random() * (sceneW - w);
+    const y = Math.random() * (sceneH - h);
+
+    let el;
+    switch (choice) {
+        case 'circle': {
+            const r0 = Math.min(w, h) / 2;
+            el = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            el.setAttribute("cx", x + r0);
+            el.setAttribute("cy", y + r0);
+            el.setAttribute("r", r0);
+            break;
+        }
+        case 'ellipse': {
+            el = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+            el.setAttribute("cx", x + w / 2);
+            el.setAttribute("cy", y + h / 2);
+            el.setAttribute("rx", w / 2);
+            el.setAttribute("ry", h / 2);
+            break;
+        }
+        case 'rect': {
+            el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            el.setAttribute("x", x);
+            el.setAttribute("y", y);
+            el.setAttribute("width", w);
+            el.setAttribute("height", h);
+            break;
+        }
+        case 'rounded-rect': {
+            const rad = 0.2 * Math.min(w, h);
+            el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            el.setAttribute("x", x);
+            el.setAttribute("y", y);
+            el.setAttribute("width", w);
+            el.setAttribute("height", h);
+            el.setAttribute("rx", rad);
+            el.setAttribute("ry", rad);
+            break;
+        }
+    }
+    if (!el) return;
+
+    el.setAttribute("fill", fillHex);
+    el.setAttribute("stroke", "#333");
+    el.setAttribute("stroke-width", "1");
+    svg.appendChild(el);
+
+    sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
+    el.addEventListener('click', () => selectTexture(currentTextureIndex));
+}
+
+// --------------------------------------------------------------
+// Recompute placeholder's fill during create‐texture mode
+// --------------------------------------------------------------
+function updateExistingShapeColor() {
+    const svg = document.getElementById('scene');
+    if (!svg || !svg.firstChild) return;
+    const bw = parseFloat(document.getElementById('base-weight').value) || 0;
+    const sw = parseFloat(document.getElementById('spec-weight').value) || 0;
+    const tw = parseFloat(document.getElementById('trans-weight').value) || 0;
+    const bcRgb = hexToRgb(document.getElementById('base-color').value);
+    const scRgb = hexToRgb(document.getElementById('spec-color').value);
+    const tcRgb = hexToRgb(document.getElementById('trans-color').value);
+    let r = (bw / 100) * bcRgb.r + (sw / 100) * scRgb.r + (tw / 100) * tcRgb.r;
+    let g = (bw / 100) * bcRgb.g + (sw / 100) * scRgb.g + (tw / 100) * tcRgb.g;
+    let b = (bw / 100) * bcRgb.b + (sw / 100) * scRgb.b + (tw / 100) * tcRgb.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+    const fillHex = rgbToHex(r, g, b);
+    svg.firstChild.setAttribute('fill', fillHex);
+}
+
+// --------------------------------------------------
+// Collapse/Expand logic for the right palette
+// --------------------------------------------------
+(function () {
+    document.querySelector('#palette .header').addEventListener('click', function () {
+        document.getElementById('palette').classList.toggle('collapsed');
+    });
+})();
+
+// --------------------------------------------------
+// Drag‐to‐adjust logic for each number input
+// --------------------------------------------------
+(function () {
+    let dragging = null;
+    function onMouseMove(e) {
+        if (!dragging) return;
+        const deltaY = e.clientY - dragging.startY;
+        const step = parseFloat(dragging.input.step) || 1;
+        let deltaVal = -deltaY / 2 * step;
+        let newVal = dragging.startVal + deltaVal;
+        if (step < 1) {
+            const decimals = (step.toString().split('.')[1] || '').length;
+            newVal = parseFloat(newVal.toFixed(decimals));
+        } else {
+            newVal = Math.round(newVal);
+        }
+        newVal = Math.min(Math.max(newVal, 0), 100);
+        dragging.input.value = newVal;
+        dragging.input.dispatchEvent(new Event('input'));
+    }
+    function onMouseUp(e) {
+        if (dragging) {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            dragging = null;
+        }
+    }
+    document.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            const input = handle.parentElement.querySelector('input[type="number"]');
+            dragging = { input: input, startY: e.clientY, startVal: parseFloat(input.value) || 0 };
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    });
+})();
+
+// --------------------------------------------------
+// Show/hide the Preferences popover
+// --------------------------------------------------
+function showPrefsPopover() {
+    if (prefsPopover) return;
+    const button = document.querySelector('#texture-create-controls .prefs-button');
+    const rect = button.getBoundingClientRect();
+    prefsPopover = document.createElement('div');
+    prefsPopover.id = 'texture-prefs-popover';
+    prefsPopover.style.position = 'absolute';
+    prefsPopover.style.background = '#fff';
+    prefsPopover.style.border = '1px solid #888';
+    prefsPopover.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+    prefsPopover.style.padding = '8px';
+    prefsPopover.style.zIndex = '20';
+    prefsPopover.style.borderRadius = '4px';
+    const popoverWidth = 300;
+    const top = rect.bottom + 8;
+    const left = rect.left + (rect.width / 2) - (popoverWidth / 2);
+    prefsPopover.style.top = `${top}px`;
+    prefsPopover.style.left = `${left}px`;
+    prefsPopover.style.width = `${popoverWidth}px`;
+    const arrowBorder = document.createElement('div');
+    arrowBorder.className = 'arrow-border';
+    prefsPopover.appendChild(arrowBorder);
+    const arrowFill = document.createElement('div');
+    arrowFill.className = 'arrow-fill';
+    prefsPopover.appendChild(arrowFill);
+    const row1 = document.createElement('div');
+    row1.style.display = 'flex';
+    row1.style.alignItems = 'center';
+    row1.style.marginBottom = '8px';
+    const label1 = document.createElement('label');
+    label1.textContent = 'Create texture shape:';
+    label1.style.marginRight = '8px';
+    const select1 = document.createElement('select');
+    ['Plane', 'Sphere', 'Teapot'].forEach(opt => {
+        const o = document.createElement('option');
+        o.text = opt;
+        o.value = opt.toLowerCase();
+        select1.appendChild(o);
+    });
+    row1.appendChild(label1);
+    row1.appendChild(select1);
+    const row2 = document.createElement('div');
+    row2.style.display = 'flex';
+    row2.style.alignItems = 'center';
+    const label2 = document.createElement('label');
+    label2.textContent = 'Render style:';
+    label2.style.marginRight = '8px';
+    const select2 = document.createElement('select');
+    ['Shaded interior', 'Redshift exterior'].forEach(opt => {
+        const o = document.createElement('option');
+        o.text = opt;
+        o.value = opt.toLowerCase().replace(' ', '-');
+        select2.appendChild(o);
+    });
+    row2.appendChild(label2);
+    row2.appendChild(select2);
+    prefsPopover.appendChild(row1);
+    prefsPopover.appendChild(row2);
+    document.body.appendChild(prefsPopover);
+    setTimeout(() => {
+        window.addEventListener('click', onWindowClick);
+    }, 0);
+}
+function hidePrefsPopover() {
+    if (!prefsPopover) return;
+    window.removeEventListener('click', onWindowClick);
+    document.body.removeChild(prefsPopover);
+    prefsPopover = null;
+}
+function onWindowClick(e) {
+    if (!prefsPopover) return;
+    if (prefsPopover.contains(e.target)) return;
+    if (e.target.closest('.prefs-button')) return;
+    hidePrefsPopover();
+}
+
+// --------------------------------------------------
+// Show/hide the image‐import popover
+// --------------------------------------------------
+function showImgImportPopover(fieldId) {
+    if (imgImportPopover) return;
+    imgImportField = fieldId;
+
+    // 1) Find the <input id="fieldId">, then its .thumb-button in the same .row:
+    const inputEl = document.getElementById(fieldId);
+    const row = inputEl.closest('.row');
+    const btn = row.querySelector('.thumb-button');
+    const rect = btn.getBoundingClientRect();
+
+    // 2) Create the popover container:
+    imgImportPopover = document.createElement('div');
+    imgImportPopover.id = 'img-import-popover';
+    imgImportPopover.style.position = 'absolute';
+    imgImportPopover.style.background = '#fff';
+    imgImportPopover.style.border = '1px solid #888';
+    imgImportPopover.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+    imgImportPopover.style.padding = '8px';
+    imgImportPopover.style.zIndex = '30';
+    imgImportPopover.style.borderRadius = '4px';
+
+    // 3) Fixed dimensions:
+    const popoverWidth = 200;
+    const popoverHeight = 160;
+    imgImportPopover.style.width = `${popoverWidth}px`;
+    imgImportPopover.style.height = `${popoverHeight}px`;
+
+    // 4) Vertical centering:
+    const top = rect.top + (rect.height / 2) - (popoverHeight / 2);
+    imgImportPopover.style.top = `${top}px`;
+
+    // 5) Horizontal positioning (popover’s right edge sits just left of button):
+    const gap = 8;
+    const left = rect.left - popoverWidth - gap;
+    imgImportPopover.style.left = `${left}px`;
+
+    // 6) Append the right‐pointing arrow:
+    const arrowBorder = document.createElement('div');
+    arrowBorder.className = 'img-arrow-border';
+    imgImportPopover.appendChild(arrowBorder);
+
+    const arrowFill = document.createElement('div');
+    arrowFill.className = 'img-arrow-fill';
+    imgImportPopover.appendChild(arrowFill);
+
+    // Row: Browse...
+    const row1 = document.createElement('div');
+    row1.style.marginBottom = '8px';
+    const browseBtn = document.createElement('button');
+    browseBtn.textContent = 'Browse...';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.style.display = 'none';
+    browseBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        // 1) Ignore actual file; just generate a placeholder image:
+        const size = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Fill with a random color
+        const randomColor = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+        ctx.fillStyle = randomColor;
+        ctx.fillRect(0, 0, size, size);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GENERATED', size / 2, size / 2);
+
+        const dataUrl = canvas.toDataURL();
+
+        // 4) Store it under def[`${prefix}UseImage`] and def[`${prefix}ImgDataUrl`]:
+        const def = textures[currentTextureIndex];
+        const prefix = hyphenToCamel(fieldId);
+
+        def[`${prefix}UseImage`] = true;
+        def[`${prefix}ImgDataUrl`] = dataUrl;
+
+        updateTextureThumbnail(currentTextureIndex);
+        updateAllObjectsForTexture(currentTextureIndex);
+        loadTextureIntoEditor(currentTextureIndex);
+        updateImgImportControls();
+    });
+    row1.appendChild(browseBtn);
+    row1.appendChild(fileInput);
+
+    // Row: Remove image
+    const row2 = document.createElement('div');
+    row2.style.marginBottom = '8px';
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = 'Remove image';
+    removeBtn.addEventListener('click', () => {
+        const def = textures[currentTextureIndex];
+        const prefix = hyphenToCamel(fieldId);
+        def[`${prefix}UseImage`] = false;
+        def[`${prefix}ImgDataUrl`] = null;
+        updateTextureThumbnail(currentTextureIndex);
+        updateAllObjectsForTexture(currentTextureIndex);
+        loadTextureIntoEditor(currentTextureIndex);
+        updateImgImportControls();
+    });
+    row2.appendChild(removeBtn);
+
+    // Row: Flip H / Flip V
+    const row3 = document.createElement('div');
+    row3.style.marginBottom = '8px';
+    const flipHBtn = document.createElement('button');
+    flipHBtn.textContent = 'Flip Horizontal';
+    const flipVBtn = document.createElement('button');
+    flipVBtn.textContent = 'Flip Vertical';
+    row3.appendChild(flipHBtn);
+    row3.appendChild(flipVBtn);
+
+    // Row: Invert image
+    const row4 = document.createElement('div');
+    const invertBtn = document.createElement('button');
+    invertBtn.textContent = 'Invert image';
+    row4.appendChild(invertBtn);
+
+    imgImportPopover.appendChild(row1);
+    imgImportPopover.appendChild(row2);
+    imgImportPopover.appendChild(row3);
+    imgImportPopover.appendChild(row4);
+    document.body.appendChild(imgImportPopover);
+    updateImgImportControls();
+    setTimeout(() => {
+        window.addEventListener('click', onImgPopoverWindowClick);
+    }, 0);
+}
+
+function hyphenToCamel(str) {
+    return str.replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
+}
+
+// --------------------------------------------------------------
+// Enable/disable the Remove/Flip/Invert buttons in the popover
+// --------------------------------------------------------------
+function updateImgImportControls() {
+    if (!imgImportPopover || currentTextureIndex === null) return;
+    const def = textures[currentTextureIndex];
+    const prefix = hyphenToCamel(imgImportField);
+    const useImageKey = `${prefix}UseImage`;
+    const allBtns = imgImportPopover.querySelectorAll('button');
+    const removeBtn = allBtns[1];
+    const flipHBtn = allBtns[2];
+    const flipVBtn = allBtns[3];
+    const invertBtn = allBtns[4];
+
+    const useImage = def[useImageKey];
+    removeBtn.disabled = !useImage;
+    flipHBtn.disabled = !useImage;
+    flipVBtn.disabled = !useImage;
+    invertBtn.disabled = !useImage;
+}
+
+function hideImgImportPopover() {
+    if (!imgImportPopover) return;
+    window.removeEventListener('click', onImgPopoverWindowClick);
+    document.body.removeChild(imgImportPopover);
+    imgImportPopover = null;
+    imgImportField = null;
+}
+
+function onImgPopoverWindowClick(e) {
+    if (!imgImportPopover) return;
+    if (imgImportPopover.contains(e.target)) return;
+    if (e.target.closest('.thumb-button')) return;
+    hideImgImportPopover();
+}
+
+// --------------------------------------------------
+// Hide or show the three “base” sub-rows when base-weight changes
+// --------------------------------------------------
+function toggleBaseRows() {
+    const baseVal = parseFloat(document.getElementById('base-weight').value) || 0;
+
+    // These are the rows directly under “Base weight”:
+    const toToggle = [
+        'base-color',
+        'metalness',
+        'diffuse-roughness'
+    ];
+
+    toToggle.forEach(id => {
+        const row = document.getElementById(id).closest('.row');
+        if (row) row.style.display = (baseVal === 0 ? 'none' : 'flex');
+    });
+}
+
+
+// --------------------------------------------------
+// Remove or show “specular” sub-rows when spec Weight changes
+// --------------------------------------------------
+function toggleSpecRows() {
+    const specVal = parseFloat(document.getElementById('spec-weight').value) || 0;
+
+    // These are exactly the four rows under "Specular weight":
+    const toToggle = [
+        'spec-color',
+        'spec-roughness',
+        'roughness-anisotropy',
+        'ior'
+    ];
+
+    toToggle.forEach(id => {
+        const row = document.getElementById(id).closest('.row');
+        if (row) row.style.display = (specVal === 0 ? 'none' : 'flex');
+    });
+}
+
+// --------------------------------------------------
+// Remove or show “transmission” sub-rows when trans Weight changes
+// --------------------------------------------------
+function toggleTransRows() {
+    const transWeightEl = document.getElementById('trans-weight');
+    const val = parseFloat(transWeightEl.value) || 0;
+    const toToggle = [
+        'trans-color',
+        'depth',
+        'scatter',
+        'scatter-anisotropy',
+        'dispersion-scale',
+        'abbe'
+    ];
+    toToggle.forEach(id => {
+        const row = document.getElementById(id).closest('.row');
+        if (row) row.style.display = (val === 0) ? 'none' : 'flex';
+    });
+}
+
+// --------------------------------------------------
+// DOMContentLoaded: initialize everything + wire events
+// --------------------------------------------------
+window.addEventListener('DOMContentLoaded', function () {
+    // SVG background
+    const svg = document.getElementById('scene');
+    svg.style.backgroundColor = 'rgb(249, 249, 240)';
+
+    // -- 1) Create default "Texture-1"
+    textureCount = 1;
+    const defaultDef = {
+        id: textureCount,
+        name: 'Texture-1',
+
+        baseWeight: 50,
+        baseColor: '#ff0000',
+        baseColorUseImage: false,
+        baseColorImgDataUrl: '',
+
+        specWeight: 0,
+        specColor: '#777777',
+        specColorUseImage: false,
+        specColorImgDataUrl: null,
+
+        transWeight: 0,
+        transColor: '#777777',
+        transColorUseImage: false,
+        transColorImgDataUrl: null,
+
+        metalness: 0,
+        metalnessUseImage: false,
+        metalnessImgDataUrl: null,
+
+        diffuseRoughness: 0,
+        diffuseRoughnessUseImage: false,
+        diffuseRoughnessImgDataUrl: null,
+
+        specRoughness: 0,
+        specRoughnessUseImage: false,
+        specRoughnessImgDataUrl: null,
+
+        roughnessAnisotropy: 0,
+        roughnessAnisotropyUseImage: false,
+        roughnessAnisotropyImgDataUrl: null,
+
+        ior: 1.5,
+        iorUseImage: false,
+        iorImgDataUrl: null,
+
+        depth: 0,
+        depthUseImage: false,
+        depthImgDataUrl: null,
+
+        scatter: 0,
+        scatterUseImage: false,
+        scatterImgDataUrl: null,
+
+        scatterAnisotropy: 0,
+        scatterAnisotropyUseImage: false,
+        scatterAnisotropyImgDataUrl: null,
+
+        dispersionScale: 0,
+        dispersionScaleUseImage: false,
+        dispersionScaleImgDataUrl: null,
+
+        abbe: 0,
+        abbeUseImage: false,
+        abbeImgDataUrl: null,
+
+        metalnessImg: null,
+        diffuseRoughnessImg: null,
+        specRoughnessImg: null,
+        iorImg: null,
+        depthImg: null,
+        scatterImg: null,
+        dispersionImg: null,
+        abbeImg: null
+    };
+    textures.push(defaultDef);
+    addTextureToList(defaultDef, 0);
+    selectTexture(0);
+
+    // -- 2) Draw ruler marks and print box behind everything
+    const bbox = svg.getBoundingClientRect();
+    const sceneW = bbox.width, sceneH = bbox.height;
+    for (let y = 0; y <= sceneH; y += 50) {
+        const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        tick.setAttribute('x1', 0);
+        tick.setAttribute('y1', y);
+        tick.setAttribute('x2', 5);
+        tick.setAttribute('y2', y);
+        tick.setAttribute('stroke', '#888');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+    }
+    for (let x = 0; x <= sceneW; x += 50) {
+        const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        tick.setAttribute('x1', x);
+        tick.setAttribute('y1', 0);
+        tick.setAttribute('x2', x);
+        tick.setAttribute('y2', 5);
+        tick.setAttribute('stroke', '#888');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+    }
+    const pbW = sceneW * 0.6;
+    const pbH = sceneH * 0.6;
+    const pbX = (sceneW - pbW) / 2;
+    const pbY = (sceneH - pbH) / 2;
+    const printBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    printBox.setAttribute('x', pbX);
+    printBox.setAttribute('y', pbY);
+    printBox.setAttribute('width', pbW);
+    printBox.setAttribute('height', pbH);
+    printBox.setAttribute('fill', 'none');
+    printBox.setAttribute('stroke', '#ccc');
+    printBox.setAttribute('stroke-width', '1');
+    svg.appendChild(printBox);
+
+    // -- 3) Wire up buttons & fields --
+
+    document.getElementById('btn-create-texture')
+        .addEventListener('click', () => createNewTexture());
+
+    document.getElementById('btn-create-object')
+        .addEventListener('click', () => drawRandomShape());
+
+    document.getElementById('btn-show-demo-video')
+        .addEventListener('click', () => {
+            window.open('pbr-prototype-demo-video.mp4', '_blank');
+        });
+
+    document.querySelector('#texture-create-controls .done-button')
+        .addEventListener('click', () => exitCreateTextureContext());
+
+    document.querySelector('#texture-create-controls .prefs-button')
+        .addEventListener('click', (e) => {
+            e.stopPropagation();
+            prefsPopover ? hidePrefsPopover() : showPrefsPopover();
+        });
+
+    // === HOOK EVERY thumb-button to showImgImportPopover(fieldId) ===
+    const imageFields = [
+        'base-color',
+        'spec-color',
+        'trans-color',
+        'diffuse-roughness',
+        'spec-roughness',
+        'metalness',
+        'roughness',
+        'roughness-anisotropy',
+        'ior',
+        'depth',
+        'scatter',
+        'scatter-anisotropy',
+        'dispersion-scale',
+        'abbe'
+    ];
+    imageFields.forEach(fieldId => {
+        const inputEl = document.getElementById(fieldId);
+        if (!inputEl) return;
+        const thumbBtn = inputEl.closest('.row').querySelector('.thumb-button');
+        if (!thumbBtn) return;
+        thumbBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showImgImportPopover(fieldId);
+        });
+    });
+
+    // Whenever ANY of these “value” fields change, re-write into texture:
+    const allIds = [
+        'base-weight', 'base-color',
+        'spec-weight', 'spec-color',
+        'trans-weight', 'trans-color'
+    ];
+    allIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            if (inCreateTextureContext) updateExistingShapeColor();
+            writeInputsIntoCurrentTexture();
+        });
+    });
+
+    // AND also for all the numeric IDs:
+    const extraIds = [
+        'metalness',
+        'diffuse-roughness',
+        'spec-roughness',
+        'roughness-anisotropy',
+        'ior',
+        'depth',
+        'scatter',
+        'scatter-anisotropy',
+        'dispersion-scale',
+        'abbe'
+    ];
+    extraIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => writeInputsIntoCurrentTexture());
+    });
+
+    // When spec-weight or trans-weight changes, show/hide subordinate rows:
+    const specWeightEl = document.getElementById('spec-weight');
+    specWeightEl.addEventListener('input', toggleSpecRows);
+    const transWeightEl = document.getElementById('trans-weight');
+    transWeightEl.addEventListener('input', toggleTransRows);
+    // When base-weight changes, show/hide base sub-rows:
+    const baseWeightEl = document.getElementById('base-weight');
+    baseWeightEl.addEventListener('input', toggleBaseRows);
+
+    // Initialize hiding of spec/trans rows if weights are zero initially:
+    toggleSpecRows();
+    toggleTransRows();
+    toggleBaseRows();
+});
