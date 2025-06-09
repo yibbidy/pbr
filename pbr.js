@@ -31,6 +31,24 @@ let prefsPopover = null;
 let imgImportPopover = null;
 let imgImportField = null;
 
+let selectedObjectTextureIndex = null;
+
+function setEditorEnabled(enabled) {
+    // all form controls under #palette.content (inputs, thumb-buttons, drag handles)
+    document.querySelectorAll('#palette .content input, #palette .content button, #palette .content .drag-handle')
+        .forEach(el => {
+            // skip the toggle button in header
+            if (el.closest('.header')) return;
+            el.disabled = !enabled;
+            el.style.opacity = enabled ? '' : '0.5';
+            // grey out its label too
+            const row = el.closest('.row');
+            if (row) {
+                const lbl = row.querySelector('label');
+                if (lbl) lbl.style.color = enabled ? '' : '#888';
+            }
+        });
+}
 // ----------------------------------------------
 // Utility: Convert hex color → {r,g,b}
 // ----------------------------------------------
@@ -90,6 +108,27 @@ function updateTextureThumbnail(idx) {
 // Load texture #idx into the "Edit Texture" palette (right side)
 // ------------------------------------------------------------------------
 function loadTextureIntoEditor(idx) {
+    document.querySelectorAll('#palette .content input').forEach(el => {
+        el.disabled = false;
+        el.style.opacity = '';
+        const row = el.closest('.row');
+        if (row) row.querySelector('label').style.color = '';
+    });
+
+    // if no object selected, clear all fields
+    if (idx == null) {
+        document.querySelectorAll('#palette .content input, #palette .content .thumb-button')
+            .forEach(el => {
+                if (el.tagName === 'INPUT' && el.type === 'color') el.value = '#777777';
+                if (el.tagName === 'INPUT' && el.type === 'number') el.value = 0;
+                if (el.classList.contains('thumb-button')) el.style.backgroundImage = '', el.style.backgroundColor = '#ccc';
+            });
+        toggleBaseRows();
+        toggleSpecRows();
+        toggleTransRows();
+        return;
+    }
+
     const def = textures[idx];
     if (!def) return;
 
@@ -337,8 +376,18 @@ function loadTextureIntoEditor(idx) {
     }
 
     // → After setting any weight, we also need to hide subordinate rows if weight === 0
+    toggleBaseRows();
     toggleSpecRows();
     toggleTransRows();
+
+    document
+        .querySelectorAll('#palette .content .row input')
+        .forEach(inputEl => {
+            grayOutLabelAndHandle(inputEl, inputEl.disabled);
+        });
+
+    // finally sync the popover buttons
+    updateImgImportControls();
 }
 
 // ----------------------------------------------------------------------
@@ -382,7 +431,6 @@ function selectTexture(idx) {
     currentTextureIndex = idx;
     const newItem = document.querySelector(`.texture-item[data-texture-index="${idx}"]`);
     if (newItem) newItem.classList.add('active');
-    loadTextureIntoEditor(idx);
 }
 
 // ----------------------------------------------------------------
@@ -426,10 +474,14 @@ function addTextureToList(def, idx) {
     itemDiv.addEventListener('click', () => selectTexture(idx));
     nameInput.addEventListener('change', (e) => {
         const val = e.target.value.trim();
-        if (val.length > 0) textures[idx].name = val;
+        if (val.length > 0) {
+            textures[idx].name = val;
+            if (selectedObjectTextureIndex === idx) {
+                updateRenderControl(idx);
+            }
+        }
         else e.target.value = textures[idx].name;
     });
-    //nameInput.focus();
     nameInput.select();
 }
 
@@ -437,9 +489,9 @@ function addTextureToList(def, idx) {
 // Write right‐palette fields into textures[currentTextureIndex],
 // then update thumbnail & all objects using it.
 // ----------------------------------------------------------------
-function writeInputsIntoCurrentTexture() {
-    if (currentTextureIndex === null) return;
-    const def = textures[currentTextureIndex];
+function writeInputsIntoSelectedObjectTexture() {
+    if (selectedObjectTextureIndex === null) return;
+    const def = textures[selectedObjectTextureIndex];
 
     // — base & spec & trans (unchanged) —
     def.baseWeight = parseFloat(document.getElementById('base-weight').value) || 0;
@@ -514,9 +566,10 @@ function writeInputsIntoCurrentTexture() {
     if (abbeEl) def.abbe = parseFloat(abbeEl.value) || 0;
     def.abbeUseImage = def.abbeUseImage || false;
 
-    updateTextureThumbnail(currentTextureIndex);
-    updateAllObjectsForTexture(currentTextureIndex);
-    loadTextureIntoEditor(currentTextureIndex);
+    updateTextureThumbnail(selectedObjectTextureIndex);
+    updateAllObjectsForTexture(selectedObjectTextureIndex);
+    updateRenderControl(selectedObjectTextureIndex);
+    loadTextureIntoEditor(selectedObjectTextureIndex);
     updateImgImportControls();
 }
 
@@ -659,6 +712,32 @@ function enterCreateTextureContext() {
     createTextureShape.setAttribute("stroke", "#000000");
     createTextureShape.setAttribute("stroke-width", "1");
     svg.appendChild(createTextureShape);
+    // ─── make placeholder act like any other object ───
+    sceneObjects.push({
+        el: createTextureShape,
+        textureIndex: currentTextureIndex
+    });
+
+    createTextureShape.style.cursor = 'pointer';
+    createTextureShape.addEventListener('click', e => {
+        e.stopPropagation();             // don’t let it bubble to the SVG background
+        selectShape(createTextureShape); // re‐select it (loads editor + outline)
+    });
+
+    
+    // clear any prior outline
+    if (currentSelectedShape) {
+        currentSelectedShape.classList.remove('selected-shape');
+        }
+    
+    createTextureShape.classList.add('selected-shape');
+    currentSelectedShape = createTextureShape;
+    selectedObjectTextureIndex = currentTextureIndex;
+    setEditorEnabled(true);
+    loadTextureIntoEditor(selectedObjectTextureIndex);
+
+    // update Render palette to show this new‐texture placeholder
+    updateRenderControl(currentTextureIndex);
 
     document.getElementById('create-texture-border').style.border = '25px solid rgba(255,165,0,0.5)';
     document.getElementById('create-texture-border').style.display = 'block';
@@ -677,7 +756,6 @@ function exitCreateTextureContext() {
     const svg = document.getElementById('scene');
     if (!svg) return;
 
-    writeInputsIntoCurrentTexture();
     if (createTextureShape) {
         svg.removeChild(createTextureShape);
         createTextureShape = null;
@@ -688,6 +766,19 @@ function exitCreateTextureContext() {
     document.getElementById('texture-create-controls').style.display = 'none';
 
     document.getElementById('btn-create-object').disabled = false;
+    // ─── Clear any selected shape ───
+    if (currentSelectedShape) {
+        currentSelectedShape.classList.remove('selected-shape');
+    }
+    currentSelectedShape = null;
+    selectedObjectTextureIndex = null;
+    
+    // ─── Disable & clear the editor ───
+    setEditorEnabled(false);
+    loadTextureIntoEditor(null);
+    
+    // ─── Reset the Render palette ───
+    updateRenderControl(null);
 }
 
 // ---------------------------------------------------------
@@ -811,6 +902,16 @@ function drawRandomShape() {
 
     sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
     el.addEventListener('click', () => selectTexture(currentTextureIndex));
+
+    svg.appendChild(el);
+    sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectTexture(currentTextureIndex);
+        selectShape(el);
+    });
+    // select new shape by default
+    selectShape(el);
 }
 
 // --------------------------------------------------------------
@@ -834,15 +935,6 @@ function updateExistingShapeColor() {
     const fillHex = rgbToHex(r, g, b);
     svg.firstChild.setAttribute('fill', fillHex);
 }
-
-// --------------------------------------------------
-// Collapse/Expand logic for the right palette
-// --------------------------------------------------
-(function () {
-    document.querySelector('#palette .header').addEventListener('click', function () {
-        document.getElementById('palette').classList.toggle('collapsed');
-    });
-})();
 
 // --------------------------------------------------
 // Drag‐to‐adjust logic for each number input
@@ -881,6 +973,26 @@ function updateExistingShapeColor() {
             document.addEventListener('mouseup', onMouseUp);
         });
     });
+
+    // Collapse/Expand logic for the right palette
+    document.addEventListener('DOMContentLoaded', () => {
+        const toggleHeader = document.querySelector('#palette .header.toggle-header');
+        toggleHeader.addEventListener('click', () => {
+            document.getElementById('palette').classList.toggle('collapsed');
+        });
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const svg = document.getElementById('scene');
+        // any click on the SVG that doesn't hit a shape will bubble here
+        svg.addEventListener('click', (e) => {
+            // if you clicked the <svg> itself (not a child element)
+            if (e.target === svg) {
+                selectShape(null);
+            }
+        });
+    });
+
 })();
 
 // --------------------------------------------------
@@ -1379,7 +1491,7 @@ window.addEventListener('DOMContentLoaded', function () {
         if (!el) return;
         el.addEventListener('input', () => {
             if (inCreateTextureContext) updateExistingShapeColor();
-            writeInputsIntoCurrentTexture();
+            writeInputsIntoSelectedObjectTexture();
         });
     });
 
@@ -1399,7 +1511,7 @@ window.addEventListener('DOMContentLoaded', function () {
     extraIds.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('input', () => writeInputsIntoCurrentTexture());
+        el.addEventListener('input', () => writeInputsIntoSelectedObjectTexture());
     });
 
     // When spec-weight or trans-weight changes, show/hide subordinate rows:
@@ -1416,3 +1528,175 @@ window.addEventListener('DOMContentLoaded', function () {
     toggleTransRows();
     toggleBaseRows();
 });
+
+let currentSelectedShape = null;
+
+function selectShape(el) {
+    // remove old highlight
+    if (currentSelectedShape) {
+        currentSelectedShape.classList.remove('selected-shape');
+    }
+
+    // if el is null: clear selection
+    if (!el) {
+        currentSelectedShape = null;
+        selectedObjectTextureIndex = null;
+        // grey out & clear editor
+        setEditorEnabled(false);
+        loadTextureIntoEditor(null);
+        // Render palette → “None”
+        updateRenderControl(null);
+        return;
+    }
+
+    // otherwise highlight new shape
+    currentSelectedShape = el;
+    el.classList.add('selected-shape');
+
+    // find its textureIndex
+    const obj = sceneObjects.find(o => o.el === el);
+    selectedObjectTextureIndex = obj ? obj.textureIndex : null;
+
+    // load & enable editor
+    setEditorEnabled(true);
+    loadTextureIntoEditor(selectedObjectTextureIndex);
+    toggleBaseRows();
+    toggleSpecRows();
+    toggleTransRows();
+    updateImgImportControls();
+
+    // update Render palette
+    updateRenderControl(selectedObjectTextureIndex);    
+}
+
+
+function updateRenderControl(idx) {
+    const rc = document.getElementById('render-control');
+    const thumb = document.getElementById('render-thumb');
+    const name = document.getElementById('render-name');
+
+    if (idx === null) {
+        thumb.style.backgroundImage = '';
+        thumb.style.backgroundColor = '#ccc';
+        name.textContent = 'None';
+        rc.style.pointerEvents = 'none';
+        rc.style.opacity = '0.5';
+        return;
+    }
+
+    rc.style.pointerEvents = 'auto';
+    rc.style.opacity = '1';
+
+    const def = textures[idx];
+    name.textContent = def.name;
+
+    // same blend logic as updateTextureThumbnail(...)
+    const bw = def.baseWeight / 100;
+    const sw = def.specWeight / 100;
+    const tw = def.transWeight / 100;
+    const bc = hexToRgb(def.baseColor);
+    const sc = hexToRgb(def.specColor);
+    const tc = hexToRgb(def.transColor);
+
+    let r = bw * bc.r + sw * sc.r + tw * tc.r;
+    let g = bw * bc.g + sw * sc.g + tw * tc.g;
+    let b = bw * bc.b + sw * sc.b + tw * tc.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+
+    const fillHex = rgbToHex(r, g, b);
+    thumb.style.backgroundImage = '';
+    thumb.style.backgroundColor = fillHex;
+}
+
+
+// attach render-control click to popover
+document.addEventListener('DOMContentLoaded', () => {
+    const rc = document.getElementById('render-control');
+      rc.addEventListener('click', showRenderPopover);
+    });
+
+// compute the blended fill for a texture definition
+function computeFill(def) {
+    const bw = def.baseWeight / 100;
+    const sw = def.specWeight / 100;
+    const tw = def.transWeight / 100;
+    const bc = hexToRgb(def.baseColor);
+    const sc = hexToRgb(def.specColor);
+    const tc = hexToRgb(def.transColor);
+    let r = bw * bc.r + sw * sc.r + tw * tc.r;
+    let g = bw * bc.g + sw * sc.g + tw * tc.g;
+    let b = bw * bc.b + sw * sc.b + tw * tc.b;
+    r = Math.round(Math.min(Math.max(r, 0), 255));
+    g = Math.round(Math.min(Math.max(g, 0), 255));
+    b = Math.round(Math.min(Math.max(b, 0), 255));
+    return rgbToHex(r, g, b);
+}
+
+// only repaint one SVG element
+function updateSingleObject(el, textureIndex) {
+    const def = textures[textureIndex];
+    const fill = computeFill(def);
+    el.setAttribute('fill', fill);
+}
+
+function showRenderPopover() {
+    // 1) Create popover container
+    const pop = document.createElement('div');
+    pop.id = 'render-popover';
+    Object.assign(pop.style, {
+        position: 'absolute',
+        top: `${document.getElementById('render-control').getBoundingClientRect().bottom + 8}px`,
+        left: `${document.getElementById('render-control').getBoundingClientRect().left}px`,
+        width: '220px',           // wide enough for 2×(80px+padding)
+        background: '#fff',
+        border: '1px solid #888',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        padding: '8px',
+        zIndex: '2000',
+        display: 'flex',          // flex layout...
+        flexWrap: 'wrap',         // …that wraps
+        gap: '8px',               // spacing between items
+    });
+
+    // 2) Clone each texture-item from Resource Manager
+    textures.forEach((_, i) => {
+        const orig = document.querySelector(`.texture-item[data-texture-index="${i}"]`);
+        const clone = orig.cloneNode(true);
+
+        // 3) Outline the one matching the selected object
+        if (i === selectedObjectTextureIndex) {
+            clone.classList.add('active');
+        }
+
+        // 4) Click handler: reassign only this shape
+        clone.addEventListener('click', () => {
+            if (currentSelectedShape) {
+                const obj = sceneObjects.find(o => o.el === currentSelectedShape);
+                if (obj) {
+                    obj.textureIndex = i;
+                    updateSingleObject(currentSelectedShape, i);
+                    selectShape(currentSelectedShape); // reload editor + render thumb
+                }
+            }
+            document.body.removeChild(pop);
+        });
+
+        pop.appendChild(clone);
+    });
+
+    // 5) Show & outside-click teardown
+    document.body.appendChild(pop);
+    setTimeout(() => {
+        window.addEventListener('click', function onClick(e) {
+            if (!pop.contains(e.target) &&
+                !document.getElementById('render-control').contains(e.target)) {
+                window.removeEventListener('click', onClick);
+                pop.remove();
+            }
+        });
+    }, 0);
+}
+
+

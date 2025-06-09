@@ -9,70 +9,76 @@
 </head>
 <body>
 
-  <div id="left-container">
+    <div id="left-container">
 
-      <div id="actions-palette">
-        <div class="header">
-          Prototype actions
+        <div id="actions-palette">
+            <div class="header">
+                Prototype actions
+            </div>
+
+            <div class="action-row">
+                <button id="btn-show-demo-video"
+                        title="Show a tutorial video">
+                    Demo video
+                </button>
+            </div>
+
+            <div class="action-row">
+                <button id="btn-create-object"
+                        title="Creates and shows a new object">
+                    Create object
+                </button>
+            </div>
+
+            <div class="action-row">
+                <button id="btn-create-texture"
+                        title="Simulating creation of a new texture from resource manager">
+                    Create new texture
+                </button>
+            </div>
+
+            <!--
+              You can add more rows/buttons here by copying the same structure:
+              <div class="action-row">
+                <button id="btn-some-action" title="Tooltip text…">Some action</button>
+              </div>
+            -->
         </div>
-
-        <div class="action-row">
-          <button id="btn-show-demo-video"
-                  title="Show a tutorial video">
-            Demo video
-          </button>
+        <div id="textures-palette">
+            <div class="header">Resource Manager</div>
+            <div id="texture-grid">
+                <!-- Each new “texture-item” will be appended inside here -->
+            </div>
         </div>
-
-        <div class="action-row">
-          <button id="btn-create-object"
-                  title="Creates and shows a new object">
-            Create object
-          </button>
-        </div>
-          
-          <div class="action-row">
-          <button id="btn-create-texture"
-                  title="Simulating creation of a new texture from resource manager">
-            Create new texture
-          </button>
-        </div>
-
-        <!--
-          You can add more rows/buttons here by copying the same structure:
-          <div class="action-row">
-            <button id="btn-some-action" title="Tooltip text…">Some action</button>
-          </div>
-        -->
-      </div>
-
-      <div id="textures-palette">
-          <div class="header">Textures</div>
-          <div id="texture-grid">
-          <!-- Each new “texture-item” will be appended inside here -->
-          </div>
-      </div>
-  </div>
-
-  <div id="scene-container">
-    <svg id="scene"></svg>
-
-    <!-- 50% semi‐transparent orange border (hidden until “create texture” context) -->
-    <div id="create-texture-border"></div>
-
-    <!-- Overlay buttons (hidden until “create texture” context) -->
-    <div id="texture-create-controls">
-      <!-- Preferences button: gear icon inside a grey circle -->
-      <button class="prefs-button" title="Edit texture preferences">⚙</button>
-      <!-- Done button: orange rectangle with checkmark + “Done” -->
-      <button class="done-button">✓ Done</button>
     </div>
-  </div>
 
-  <!------- Right docked palette -------->
-  <!-- === Palette Container === -->
-  <div id="palette">
+    <div id="scene-container">
+        <svg id="scene"></svg>
+
+        <!-- 50% semi‐transparent orange border (hidden until “create texture” context) -->
+        <div id="create-texture-border"></div>
+
+        <!-- Overlay buttons (hidden until “create texture” context) -->
+        <div id="texture-create-controls">
+            <!-- Preferences button: gear icon inside a grey circle -->
+            <button class="prefs-button" title="Edit texture preferences">⚙</button>
+            <!-- Done button: orange rectangle with checkmark + “Done” -->
+            <button class="done-button">✓ Done</button>
+        </div>
+    </div>
+
+    <!------- Right docked palette -------->
+    <!-- === Render Palette (new) === -->
+    <div id="palette">
+          <div class="header">Render</div>
+          <div id="render-control" class="texture-item" style="pointer-events:all;">
+                <div id="render-thumb" class="texture-thumb"></div>
+                <div id="render-name" class="texture-name">None</div>
+        </div>
+    
+    <!-- === Edit Texture Palette === -->
     <!-- Header -->
-    <div class="header">
+    <div class="header toggle-header">
       <span class="toggle">▼</span>
       Edit Texture
     </div>
@@ -110,8 +116,8 @@
       <div class="row">
         <label class="sub-label">Diffuse roughness:</label>
         <div class="input-container">
-          <input type="number" value="0" step="1">
-          <div id="diffuse-roughness" class="drag-handle">⇕</div>
+          <input id="diffuse-roughness" type="number" value="0" step="1">
+          <div class="drag-handle">⇕</div>
         </div>
         <button class="thumb-button"></button>
       </div>
@@ -228,8 +234,8 @@
     </div>
   </div>
 
-  <script src="pbr.js"></script>
+    <script src="pbr.js"></script>
 
-  
+
 </body>
 </html>

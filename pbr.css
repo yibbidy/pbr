@@ -138,19 +138,20 @@ body {
 
 	/* Header bar (collapse/expand) */
 	#palette .header {
-		padding: 10px;
-		background: #ddd;
-		cursor: pointer;
-		user-select: none;
-		display: flex;
-		align-items: center;
+		padding: 12px;
+		background: #ccc;
+		font-weight: bold;
+		text-align: center;
+		border-bottom: 1px solid #bbb;
 	}
 
-		#palette .header .toggle {
-			display: inline-block;
-			margin-right: 5px;
-			transition: transform 0.2s ease;
-		}
+
+
+#palette .header .toggle {
+	display: inline-block;
+	margin-right: 5px;
+	transition: transform 0.2s ease;
+}
 
 	#palette.collapsed .header .toggle {
 		transform: rotate(-90deg);
@@ -372,6 +373,50 @@ body {
 	top: calc(50% - 7px); /* vertically center inside the border triangle */
 	width: 0;
 	height: 0;
+}
+
+/* Selection outline for SVG shapes */
+.selected-shape {
+	stroke: orange;
+	stroke-width: 3px;
+}
+
+/* Render palette styling */
+#render-palette {
+	position: fixed;
+	top: 0;
+	right: 0;
+	width: 300px;
+	background: #f8f8f8;
+	border-left: 1px solid #ccc;
+	z-index: 1001;
+}
+
+#render-control {
+	margin: 16px auto;
+	cursor: pointer;
+}
+
+/* make the collapsible header look like your row labels */
+#palette .header.toggle-header {
+	background: transparent; /* no gray bar */
+	cursor: pointer;
+	padding: 5px 10px; /* match your .row padding */
+	font-size: 14px; /* same size as labels */
+	color: #000; /* black text */
+	display: flex;
+	align-items: center;
+}
+
+#palette .header.toggle-header .toggle {
+	margin-right: 5px;
+	transform-origin: center; /* for the rotate animation */
+	transition: transform 0.2s ease;
+}
+
+/* rotate arrow when collapsed */
+#palette.collapsed .header.toggle-header .toggle {
+	transform: rotate(-90deg);
 }
 
 /* End of pbr.css */
