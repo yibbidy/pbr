@@ -1153,15 +1153,17 @@ function showImgImportPopover(fieldId) {
         const dataUrl = canvas.toDataURL();
 
         // 4) Store it under def[`${prefix}UseImage`] and def[`${prefix}ImgDataUrl`]:
-        const def = textures[currentTextureIndex];
+        const idx = selectedObjectTextureIndex;
+        if (idx === null) return;                // nothing selected → no op
+        const def = textures[idx];
         const prefix = hyphenToCamel(fieldId);
 
         def[`${prefix}UseImage`] = true;
         def[`${prefix}ImgDataUrl`] = dataUrl;
 
-        updateTextureThumbnail(currentTextureIndex);
-        updateAllObjectsForTexture(currentTextureIndex);
-        loadTextureIntoEditor(currentTextureIndex);
+        updateTextureThumbnail(idx);
+        updateAllObjectsForTexture(idx);
+        loadTextureIntoEditor(idx);
         updateImgImportControls();
     });
     row1.appendChild(browseBtn);
@@ -1173,13 +1175,16 @@ function showImgImportPopover(fieldId) {
     const removeBtn = document.createElement('button');
     removeBtn.textContent = 'Remove image';
     removeBtn.addEventListener('click', () => {
-        const def = textures[currentTextureIndex];
+        const idx = selectedObjectTextureIndex;
+        if (idx === null) return;
+        const def = textures[idx];
+        
         const prefix = hyphenToCamel(fieldId);
         def[`${prefix}UseImage`] = false;
         def[`${prefix}ImgDataUrl`] = null;
-        updateTextureThumbnail(currentTextureIndex);
-        updateAllObjectsForTexture(currentTextureIndex);
-        loadTextureIntoEditor(currentTextureIndex);
+        updateTextureThumbnail(idx);
+        updateAllObjectsForTexture(idx);
+        loadTextureIntoEditor(idx);
         updateImgImportControls();
     });
     row2.appendChild(removeBtn);
