@@ -70,169 +70,459 @@
     <!------- Right docked palette -------->
     <!-- === Render Palette (new) === -->
     <div id="palette">
-          <div class="header">Render</div>
-          <div id="render-control" class="texture-item" style="pointer-events:all;">
-                <div id="render-thumb" class="texture-thumb"></div>
-                <div id="render-name" class="texture-name">None</div>
+        <div class="header">Object info – Render</div>
+        <!-- Sphere row -->
+        <div class="row">
+            <label class="row-label sphere-label">Sphere</label>
         </div>
-    
-    <!-- === Edit Texture Palette === -->
-    <!-- Header -->
-    <div class="header toggle-header">
-      <span class="toggle">▼</span>
-      Edit Texture
+        <!-- Sketch row -->
+        <div class="row">
+            <label class="row-label">Sketch:</label>
+            <select class="row-input">
+                <option>Document Default (Rough)</option>
+                <option>No Sketch</option>
+                <option>Rough</option>
+                <option>Careful</option>
+                <option>Certain</option>
+                <option>Quick</option>
+                <option>Tentative</option>
+            </select>
+        </div>
+        <!-- horizontal separator -->
+        <hr class="divider" />
+        <!-- Texture row -->
+        <div class="row">
+            <label class="row-label">Texture</label>
+        </div>
+        <!-- Overall container -->
+        <div class="row overall-container">
+            <span class="row-label">Overall</span>
+        </div>
+
+        <div id="render-control" class="texture-item" style="pointer-events:all;">
+            <div id="render-thumb" class="texture-thumb"></div>
+            <div id="render-name" class="texture-name">None</div>
+        </div>
+
+        <!-- === Edit Texture Palette === -->
+        <!-- Header -->
+        <div class="header toggle-header">
+            <span class="toggle">▼</span>
+            Edit Texture
+        </div>
+
+        <!-- Expandable Content -->
+        <div class="content">
+            <!-- Row #1: Base weight (number + drag‐handle) -->
+            <div class="row">
+                <label>Base weight:</label>
+                <div class="input-container">
+                    <input id="base-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <!-- No thumbnail in this row, so no button here -->
+            </div>
+
+            <!-- Row #2: Color (stretches + thumbnail at right) -->
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="base-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Row #3: Metalness (number + drag‐handle, stretches + thumbnail at right) -->
+            <div class="row">
+                <label class="sub-label">Metalness:</label>
+                <div class="input-container">
+                    <input id="metalness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Row #4: Diffuse roughness (number + drag‐handle, stretches + thumbnail at right) -->
+            <div class="row">
+                <label class="sub-label">Diffuse roughness:</label>
+                <div class="input-container">
+                    <input id="diffuse-roughness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Row #5: Specular weight (number + drag‐handle) -->
+            <div class="row">
+                <label>Specular weight:</label>
+                <div class="input-container">
+                    <input id="spec-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <!-- No thumbnail in this row, so no button here -->
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="spec-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Roughness:</label>
+                <div class="input-container">
+                    <input id="spec-roughness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Roughness anisotropy:</label>
+                <div class="input-container">
+                    <input id="roughness-anisotropy" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Ior:</label>
+                <div class="input-container">
+                    <input id="ior" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Transmission -->
+            <div class="row">
+                <label>Transmission weight:</label>
+                <div class="input-container">
+                    <input id="trans-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <!-- No thumbnail in this row, so no button here -->
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="trans-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Depth:</label>
+                <div class="input-container">
+                    <input id="depth" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Scatter:</label>
+                <div class="input-container">
+                    <input id="scatter" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Scatter anisotropy:</label>
+                <div class="input-container">
+                    <input id="scatter-anisotropy" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Dispersion scale:</label>
+                <div class="input-container">
+                    <input id="dispersion-scale" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <div class="row">
+                <label class="sub-label">Abbe:</label>
+                <div class="input-container">
+                    <input id="abbe" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Subsurface -->
+            <div class="row">
+                <label>Subsurface weight:</label>
+                <div class="input-container">
+                    <input id="subsurface-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="subsurface-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Radius:</label>
+                <div class="input-container">
+                    <input id="subsurface-radius" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Radius Scale:</label>
+                <div class="input-container">
+                    <input id="subsurface-radius-scale" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Scatter anisotropy:</label>
+                <div class="input-container">
+                    <input id="subsurface-scatter-anisotropy" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Coat -->
+            <div class="row">
+                <label>Coat weight:</label>
+                <div class="input-container">
+                    <input id="coat-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="coat-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Roughness:</label>
+                <div class="input-container">
+                    <input id="coat-roughness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Roughness anisotropy:</label>
+                <div class="input-container">
+                    <input id="coat-roughness-anisotropy" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Ior:</label>
+                <div class="input-container">
+                    <input id="coat-ior" type="number" value="1.5" step="0.01">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Darkening:</label>
+                <div class="input-container">
+                    <input id="coat-darkening" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Fuzz -->
+            <div class="row">
+                <label>Fuzz weight:</label>
+                <div class="input-container">
+                    <input id="fuzz-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="fuzz-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Roughness:</label>
+                <div class="input-container">
+                    <input id="fuzz-roughness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Emission -->
+            <div class="row">
+                <label>Emission weight:</label>
+                <div class="input-container">
+                    <input id="emission-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Color:</label>
+                <input id="emission-color" type="color" value="#777777">
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Thin-film -->
+            <div class="row">
+                <label>Thin-film weight:</label>
+                <div class="input-container">
+                    <input id="thin-film-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Thickness:</label>
+                <div class="input-container">
+                    <input id="thin-film-thickness" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Ior:</label>
+                <div class="input-container">
+                    <input id="thin-film-ior" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+
+            <!-- Geometry -->
+            <div class="row">
+                <label>Geometry weight:</label>
+                <div class="input-container">
+                    <input id="geometry-weight" type="number" value="0" step="1" min="0" max="100">
+                    <div class="drag-handle">⇕</div>
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Thin walled:</label>
+                <div class="input-container">
+                    <input id="geometry-thin-walled" type="checkbox" value="0">
+                </div>
+            </div>
+            <div class="row">
+                <label class="sub-label">Normal:</label>
+                <div class="input-container">
+                    <input id="geometry-normal" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Tangent:</label>
+                <div class="input-container">
+                    <input id="geometry-tangent" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Coat normal:</label>
+                <div class="input-container">
+                    <input id="geometry-coat-normal" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label class="sub-label">Coat tangent:</label>
+                <div class="input-container">
+                    <input id="geometry-coat-tangent" type="number" value="0" step="1">
+                    <div class="drag-handle">⇕</div>
+                </div>
+                <button class="thumb-button"></button>
+            </div>
+            <div class="row">
+                <label>Texture Size:</label>
+                <div class="input-container">
+                    <input id="texture-size" type="number" value="1">
+                </div>
+                <button id="btn-texture-size" class="thumb-button">…</button>
+            </div>
+            <!-- Duplicate Texture (full width) -->
+            <div class="row duplicate-row">
+                <label></label>
+                <button id="btn-duplicate-texture" class="duplicate-button">Duplicate texture</button>
+            </div>
+
+            <div class="row duplicate-row">
+                <label></label>
+                <button id="btn-edit-surface-hatch" class="duplicate-button">Edit surface hatch</button>
+            </div>
+
+            <!-- Edit child texture -->
+            <div class="row duplicate-row">
+                <label></label>
+                <button id="btn-edit-child-texture" class="duplicate-button">Edit child texture</button>
+            </div>
+
+            <!--
+              You can continue adding more rows, following exactly the same patterns:
+              - For any “<Something> weight:”, use the .input-container + <input type="number"> + .drag-handle combo.
+              - For any “<Something>:” that you want as a color swatch, use the <input type="color"> (flex:1) + <button class="thumb-button">.
+              - If a row needs both a wide input and a thumbnail, put the input inside .input-container (or just the color input with flex:1) and then the <button class="thumb-button">.
+            -->
+        </div>
     </div>
 
-    <!-- Expandable Content -->
-    <div class="content">
-      <!-- Row #1: Base weight (number + drag‐handle) -->
-      <div class="row">
-        <label>Base weight:</label>
-        <div class="input-container">
-          <input id="base-weight" type="number" value="0" step="1" min="0" max="100">
-          <div class="drag-handle">⇕</div>
-        </div>
-        <!-- No thumbnail in this row, so no button here -->
-      </div>
-
-      <!-- Row #2: Color (stretches + thumbnail at right) -->
-      <div class="row">
-        <label class="sub-label">Color:</label>
-        <input id="base-color" type="color" value="#777777">
-        <button class="thumb-button"></button>
-      </div>
-
-      <!-- Row #3: Metalness (number + drag‐handle, stretches + thumbnail at right) -->
-      <div class="row">
-        <label class="sub-label">Metalness:</label>
-        <div class="input-container">
-          <input id="metalness" type="number" value="0" step="1">
-          <div class="drag-handle">⇕</div>
-        </div>
-        <button class="thumb-button"></button>
-      </div>
-
-      <!-- Row #4: Diffuse roughness (number + drag‐handle, stretches + thumbnail at right) -->
-      <div class="row">
-        <label class="sub-label">Diffuse roughness:</label>
-        <div class="input-container">
-          <input id="diffuse-roughness" type="number" value="0" step="1">
-          <div class="drag-handle">⇕</div>
-        </div>
-        <button class="thumb-button"></button>
-      </div>
-
-      <!-- Row #5: Specular weight (number + drag‐handle) -->
-      <div class="row">
-        <label>Specular weight:</label>
-        <div class="input-container">
-          <input id="spec-weight" type="number" value="0" step="1" min="0" max="100">
-          <div class="drag-handle">⇕</div>
-        </div>
-        <!-- No thumbnail in this row, so no button here -->
-      </div>
-
-        <div class="row">
-            <label class="sub-label">Color:</label>
-            <input id="spec-color" type="color" value="#777777">
-            <button class="thumb-button"></button>
-        </div>
-
-        <div class="row">
-            <label class="sub-label">Roughness:</label>
-            <div class="input-container">
-            <input id="spec-roughness" type="number" value="0" step="1">
-            <div class="drag-handle">⇕</div>
+    <!-- Texture Size Modal -->
+    <div id="texture-size-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">Set image size</div>
+            <div class="modal-body">
+                <label for="texture-size-modal-input">Size</label>
+                <input id="texture-size-modal-input" type="text" style="width:100%; box-sizing:border-box; margin-top:4px;" />
             </div>
-            <button class="thumb-button"></button>
-        </div>
-
-        <div class="row">
-            <label class="sub-label">Roughness anisotropy:</label>
-            <div class="input-container">
-            <input id="roughness-anisotropy" type="number" value="0" step="1">
-            <div class="drag-handle">⇕</div>
+            <div class="modal-footer">
+                <button id="texture-size-ok">OK</button>
+                <button id="texture-size-cancel">Cancel</button>
             </div>
-            <button class="thumb-button"></button>
         </div>
-
-        <div class="row">
-            <label class="sub-label">Ior:</label>
-            <div class="input-container">
-            <input id="ior" type="number" value="0" step="1">
-            <div class="drag-handle">⇕</div>
-            </div>
-            <button class="thumb-button"></button>
-        </div>
-
-        <!-- Transmission -->
-        <div class="row">
-          <label>Transmission weight:</label>
-          <div class="input-container">
-            <input id="trans-weight" type="number" value="0" step="1" min="0" max="100">
-            <div class="drag-handle">⇕</div>
-          </div>
-          <!-- No thumbnail in this row, so no button here -->
-        </div>
-
-          <div class="row">
-              <label class="sub-label">Color:</label>
-              <input id="trans-color" type="color" value="#777777">
-              <button class="thumb-button"></button>
-          </div>
-
-          <div class="row">
-              <label class="sub-label">Depth:</label>
-              <div class="input-container">
-              <input id="depth" type="number" value="0" step="1">
-              <div class="drag-handle">⇕</div>
-              </div>
-              <button class="thumb-button"></button>
-          </div>
-
-          <div class="row">
-              <label class="sub-label">Scatter:</label>
-              <div class="input-container">
-              <input id="scatter" type="number" value="0" step="1">
-              <div class="drag-handle">⇕</div>
-              </div>
-              <button class="thumb-button"></button>
-          </div>
-
-          <div class="row">
-              <label class="sub-label">Scatter anisotropy:</label>
-              <div class="input-container">
-              <input id="scatter-anisotropy" type="number" value="0" step="1">
-              <div class="drag-handle">⇕</div>
-              </div>
-              <button class="thumb-button"></button>
-          </div>
-
-        <div class="row">
-            <label class="sub-label">Dispersion scale:</label>
-            <div class="input-container">
-             <input id="dispersion-scale" type="number" value="0" step="1">
-                <div class="drag-handle">⇕</div>
-            </div>
-            <button class="thumb-button"></button>
-        </div>
-
-        <div class="row">
-            <label class="sub-label">Abbe:</label>
-            <div class="input-container">
-            <input id="abbe" type="number" value="0" step="1">
-            <div class="drag-handle">⇕</div>
-            </div>
-            <button class="thumb-button"></button>
-        </div>
-      <!--
-        You can continue adding more rows, following exactly the same patterns:
-        - For any “<Something> weight:”, use the .input-container + <input type="number"> + .drag-handle combo.
-        - For any “<Something>:” that you want as a color swatch, use the <input type="color"> (flex:1) + <button class="thumb-button">.
-        - If a row needs both a wide input and a thumbnail, put the input inside .input-container (or just the color input with flex:1) and then the <button class="thumb-button">.
-      -->
     </div>
-  </div>
+
+    <!-- Duplicate Texture Modal -->
+    <div id="duplicate-texture-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">Duplicate texture</div>
+            <div class="modal-body">
+                <label for="duplicate-texture-name">Name</label>
+                <input id="duplicate-texture-name" type="text" style="width:100%; box-sizing:border-box; margin-top:4px;">
+            </div>
+            <div class="modal-footer">
+                <button id="duplicate-texture-ok">OK</button>
+                <button id="duplicate-texture-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Surface Hatch Modal -->
+    <div id="surface-hatch-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">Edit surface hatch</div>
+            <div class="modal-body">
+                <!-- put your hatch-specific controls here -->
+                <p>Existing surface hatch dialog content here.</p>
+            </div>
+            <div class="modal-footer">
+                <button id="surface-hatch-ok">OK</button>
+                <button id="surface-hatch-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
 
     <script src="pbr.js"></script>
 

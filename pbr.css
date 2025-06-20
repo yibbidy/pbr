@@ -419,4 +419,124 @@ body {
 	transform: rotate(-90deg);
 }
 
+/* Make our new rows line up just like Base weight */
+#palette .row {
+	display: flex;
+	align-items: center;
+	padding: 5px 10px;
+}
+
+/* same label styling as Base weight’s labels */
+#palette .row-label {
+	width: 120px;
+	font-size: 14px;
+	white-space: nowrap;
+}
+
+/* bold Sphere only */
+#palette .sphere-label {
+	font-weight: bold;
+}
+
+/* make the <select> fill the rest of the row */
+#palette .row-input {
+	flex: 1;
+	height: 28px;
+	font-size: 14px;
+	margin-left: 8px;
+	box-sizing: border-box;
+}
+
+/* simple horizontal separator */
+#palette .divider {
+	border: none;
+	border-top: 1px solid #ccc;
+	margin: 8px 0;
+}
+
+/* “Overall” box styling */
+#palette .overall-container {
+	/* use a container so padding + border works */
+	padding: 4px 8px;
+	margin: 0 10px 8px; /* line up with rows */
+	border: 1px solid #999; /* gray border */
+	background: #fff; /* white fill */
+	box-sizing: border-box;
+	/* keep the text the same as Base weight */
+	font-size: 14px;
+	/* align the label inside the box */
+	display: inline-block;
+}
+
+/* Modal overlay + dialog */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0,0,0,0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 2000;
+}
+
+.modal {
+	background: #fff;
+	border-radius: 8px;
+	padding: 16px;
+	min-width: 300px;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+	font-weight: bold;
+	margin-bottom: 12px;
+}
+
+.modal-body {
+	margin-bottom: 12px;
+}
+
+.modal-footer {
+	text-align: right;
+}
+
+.modal-footer button {
+	margin-left: 8px;
+}
+
+/* make text‐inputs inside .input-container behave like the number inputs */
+#palette .input-container input[type="text"] {
+	width: 100%;
+	box-sizing: border-box;
+	font-size: 14px;
+	padding: 4px 8px;
+}
+
+/* Make that duplicate‐row label take no space */
+#palette .duplicate-row > label {
+	display: none;
+}
+
+/* Stretch the button full width */
+#palette .duplicate-button {
+	flex: 1;
+	height: 28px; /* match your other inputs */
+	font-size: 14px; /* match row font */
+	background: #ccc; /* same style as your thumb‐buttons */
+	border: 1px solid #999;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+/* Hover/focus states (optional, to match your other buttons) */
+#palette .duplicate-button:hover,
+#palette .duplicate-button:focus {
+	background: #bbb;
+	border-color: #888;
+}
+
+
 /* End of pbr.css */

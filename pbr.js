@@ -32,6 +32,8 @@ let imgImportPopover = null;
 let imgImportField = null;
 
 let selectedObjectTextureIndex = null;
+// remember which shape to restore after child-texture edit
+let _restoreSelectedShape = null;
 
 function setEditorEnabled(enabled) {
     // all form controls under #palette.content (inputs, thumb-buttons, drag handles)
@@ -107,286 +109,149 @@ function updateTextureThumbnail(idx) {
 // ------------------------------------------------------------------------
 // Load texture #idx into the "Edit Texture" palette (right side)
 // ------------------------------------------------------------------------
-function loadTextureIntoEditor(idx) {
-    document.querySelectorAll('#palette .content input').forEach(el => {
-        el.disabled = false;
-        el.style.opacity = '';
-        const row = el.closest('.row');
-        if (row) row.querySelector('label').style.color = '';
-    });
+// helper: set thumb-button background from a UseImage flag + dataURL
+function applyThumb(thumbEl, useImage, imgDataUrl) {
+    if (!thumbEl) return;
+    if (useImage && imgDataUrl) {
+        thumbEl.style.backgroundImage = `url(${imgDataUrl})`;
+        thumbEl.style.backgroundSize = 'cover';
+        thumbEl.style.backgroundColor = 'transparent';
+    } else {
+        thumbEl.style.backgroundImage = '';
+        thumbEl.style.backgroundColor = '#ccc';
+    }
+}
 
-    // if no object selected, clear all fields
+// helper: load a field + optional thumbnail
+function loadField(id, def, opts = { noThumb: false }) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // set value / checked
+    if (el.type === 'checkbox') {
+        el.checked = !!def.value;
+    } else {
+        el.value = def.value;
+        el.disabled = !!def.useImage;
+        grayOutLabelAndHandle(el, def.useImage);
+    }
+    // thumbnail?
+    if (!opts.noThumb) {
+        const thumb = el.closest('.row')?.querySelector('.thumb-button');
+        applyThumb(thumb, def.useImage, def.imgDataUrl);
+    }
+}
+
+function loadTextureIntoEditor(idx) {
+    // 1) enable & un-gray all inputs
+    document.querySelectorAll('#palette .content input')
+        .forEach(el => {
+            el.disabled = false;
+            el.style.opacity = '';
+            const lbl = el.closest('.row')?.querySelector('label');
+            if (lbl) lbl.style.color = '';
+        });
+
+    // 2) no-selection → reset everything
     if (idx == null) {
         document.querySelectorAll('#palette .content input, #palette .content .thumb-button')
             .forEach(el => {
                 if (el.tagName === 'INPUT' && el.type === 'color') el.value = '#777777';
                 if (el.tagName === 'INPUT' && el.type === 'number') el.value = 0;
-                if (el.classList.contains('thumb-button')) el.style.backgroundImage = '', el.style.backgroundColor = '#ccc';
+                if (el.classList.contains('thumb-button')) {
+                    el.style.backgroundImage = '';
+                    el.style.backgroundColor = '#ccc';
+                }
             });
-        toggleBaseRows();
-        toggleSpecRows();
-        toggleTransRows();
+        toggleBaseRows(); toggleSpecRows(); toggleTransRows();
         return;
     }
 
     const def = textures[idx];
     if (!def) return;
 
-    // — base‐color —
-    const baseWeightEl = document.getElementById('base-weight');
-    const baseColorEl = document.getElementById('base-color');
-    baseWeightEl.value = def.baseWeight;
-    baseColorEl.value = def.baseColor;
-    baseColorEl.disabled = def.baseColorUseImage;
-    grayOutLabelAndHandle(baseColorEl, def.baseColorUseImage);
+    // 3) weights (no thumbs)
+    ['base-weight', 'spec-weight', 'trans-weight',
+        'subsurface-weight', 'coat-weight', 'fuzz-weight',
+        'emission-weight', 'thin-film-weight', 'geometry-weight'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = def[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    });
 
-    const baseThumb = baseColorEl.closest('.row').querySelector('.thumb-button');
-    if (def.baseColorUseImage && def.baseColorImgDataUrl) {
-        baseThumb.style.backgroundImage = `url(${def.baseColorImgDataUrl})`;
-        baseThumb.style.backgroundSize = 'cover';
-        baseThumb.style.backgroundColor = 'transparent';
-    } else {
-        baseThumb.style.backgroundImage = '';
-        baseThumb.style.backgroundColor = '#ccc';
-    }
+    // 4) all “value+thumb” fields
+    const fields = [
+        // id                 , defKey            , useKey                 , imgKey
+        ['base-color', 'baseColor', 'baseColorUseImage', 'baseColorImgDataUrl'],
+        ['spec-color', 'specColor', 'specColorUseImage', 'specColorImgDataUrl'],
+        ['trans-color', 'transColor', 'transColorUseImage', 'transColorImgDataUrl'],
 
-    // — specular‐color —
-    const specWeightEl = document.getElementById('spec-weight');
-    const specColorEl = document.getElementById('spec-color');
-    specWeightEl.value = def.specWeight;
-    specColorEl.value = def.specColor;
-    specColorEl.disabled = def.specColorUseImage;
-    grayOutLabelAndHandle(specColorEl, def.specColorUseImage);
+        ['metalness', 'metalness', 'metalnessUseImage', 'metalnessImgDataUrl'],
+        ['diffuse-roughness', 'diffuseRoughness', 'diffuseRoughnessUseImage', 'diffuseRoughnessImgDataUrl'],
+        ['spec-roughness', 'specRoughness', 'specRoughnessUseImage', 'specRoughnessImgDataUrl'],
+        ['roughness-anisotropy', 'roughnessAnisotropy', 'roughnessAnisotropyUseImage', 'roughnessAnisotropyImgDataUrl'],
+        ['ior', 'ior', 'iorUseImage', 'iorImgDataUrl'],
+        ['depth', 'depth', 'depthUseImage', 'depthImgDataUrl'],
+        ['scatter', 'scatter', 'scatterUseImage', 'scatterImgDataUrl'],
+        ['scatter-anisotropy', 'scatterAnisotropy', 'scatterAnisotropyUseImage', 'scatterAnisotropyImgDataUrl'],
+        ['dispersion-scale', 'dispersionScale', 'dispersionScaleUseImage', 'dispersionScaleImgDataUrl'],
+        ['abbe', 'abbe', 'abbeUseImage', 'abbeImgDataUrl'],
 
-    const specThumb = specColorEl.closest('.row').querySelector('.thumb-button');
-    if (def.specColorUseImage && def.specColorImgDataUrl) {
-        specThumb.style.backgroundImage = `url(${def.specColorImgDataUrl})`;
-        specThumb.style.backgroundSize = 'cover';
-        specThumb.style.backgroundColor = 'transparent';
-    } else {
-        specThumb.style.backgroundImage = '';
-        specThumb.style.backgroundColor = '#ccc';
-    }
+        ['subsurface-color', 'subsurfaceColor', 'subsurfaceColorUseImage', 'subsurfaceColorImgDataUrl'],
+        ['subsurface-radius', 'subsurfaceRadius', 'subsurfaceRadiusUseImage', 'subsurfaceRadiusImgDataUrl'],
+        ['subsurface-radius-scale', 'subsurfaceRadiusScale', 'subsurfaceRadiusScaleUseImage', 'subsurfaceRadiusScaleImgDataUrl'],
+        ['subsurface-scatter-anisotropy', 'subsurfaceScatterAnisotropy', 'subsurfaceScatterAnisotropyUseImage', 'subsurfaceScatterAnisotropyImgDataUrl'],
 
-    // — transmission‐color —
-    const transWeightEl = document.getElementById('trans-weight');
-    const transColorEl = document.getElementById('trans-color');
-    transWeightEl.value = def.transWeight;
-    transColorEl.value = def.transColor;
-    transColorEl.disabled = def.transColorUseImage;
-    grayOutLabelAndHandle(transColorEl, def.transColorUseImage);
+        ['coat-color', 'coatColor', 'coatColorUseImage', 'coatColorImgDataUrl'],
+        ['coat-roughness', 'coatRoughness', 'coatRoughnessUseImage', 'coatRoughnessImgDataUrl'],
+        ['coat-roughness-anisotropy', 'coatRoughnessAnisotropy', 'coatRoughnessAnisotropyUseImage', 'coatRoughnessAnisotropyImgDataUrl'],
+        ['coat-ior', 'coatIor', 'coatIorUseImage', 'coatIorImgDataUrl'],
+        ['coat-darkening', 'coatDarkening', 'coatDarkeningUseImage', 'coatDarkeningImgDataUrl'],
 
-    const transThumb = transColorEl.closest('.row').querySelector('.thumb-button');
-    if (def.transColorUseImage && def.transColorImgDataUrl) {
-        transThumb.style.backgroundImage = `url(${def.transColorImgDataUrl})`;
-        transThumb.style.backgroundSize = 'cover';
-        transThumb.style.backgroundColor = 'transparent';
-    } else {
-        transThumb.style.backgroundImage = '';
-        transThumb.style.backgroundColor = '#ccc';
-    }
+        ['fuzz-color', 'fuzzColor', 'fuzzColorUseImage', 'fuzzColorImgDataUrl'],
+        ['fuzz-roughness', 'fuzzRoughness', 'fuzzRoughnessUseImage', 'fuzzRoughnessImgDataUrl'],
 
-    // — NEW: metalness —
-    const metalEl = document.getElementById('metalness');
-    if (metalEl) {
-        metalEl.value = def.metalness;
-        metalEl.disabled = def.metalnessUseImage;
-        grayOutLabelAndHandle(metalEl, def.metalnessUseImage);
-        const metalThumb = metalEl.closest('.row').querySelector('.thumb-button');
-        if (metalThumb) {
-            if (def.metalnessUseImage && def.metalnessImgDataUrl) {
-                metalThumb.style.backgroundImage = `url(${def.metalnessImgDataUrl})`;
-                metalThumb.style.backgroundSize = 'cover';
-                metalThumb.style.backgroundColor = 'transparent';
-            } else {
-                metalThumb.style.backgroundImage = '';
-                metalThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
+        ['emission-color', 'emissionColor', 'emissionColorUseImage', 'emissionColorImgDataUrl'],
 
-    // — NEW: roughness —
-    const roughEl = document.getElementById('diffuse-roughness');
-    if (roughEl) {
-        roughEl.value = def.diffuseRoughness;
-        roughEl.disabled = def.diffuseRoughnessUseImage;
-        grayOutLabelAndHandle(roughEl, def.diffuseRoughnessUseImage);
-        const roughThumb = roughEl.closest('.row').querySelector('.thumb-button');
-        if (roughThumb) {
-            if (def.diffuseRoughnessUseImage && def.diffuseRoughnessImgDataUrl) {
-                roughThumb.style.backgroundImage = `url(${def.diffuseRoughnessImgDataUrl})`;
-                roughThumb.style.backgroundSize = 'cover';
-                roughThumb.style.backgroundColor = 'transparent';
-            } else {
-                roughThumb.style.backgroundImage = '';
-                roughThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
+        ['thin-film-thickness', 'thinFilmThickness', 'thinFilmThicknessUseImage', 'thinFilmThicknessImgDataUrl'],
+        ['thin-film-ior', 'thinFilmIor', 'thinFilmIorUseImage', 'thinFilmIorImgDataUrl'],
 
-    const specRoughEl = document.getElementById('spec-roughness');
-    if (specRoughEl) {
-        specRoughEl.value = def.specRoughness;
-        specRoughEl.disabled = def.specRoughnessUseImage;
-        grayOutLabelAndHandle(specRoughEl, def.specRoughnessUseImage);
-        const roughThumb = specRoughEl.closest('.row').querySelector('.thumb-button');
-        if (roughThumb) {
-            if (def.specRoughnessUseImage && def.specRoughnessImgDataUrl) {
-                roughThumb.style.backgroundImage = `url(${def.specRoughnessImgDataUrl})`;
-                roughThumb.style.backgroundSize = 'cover';
-                roughThumb.style.backgroundColor = 'transparent';
-            } else {
-                roughThumb.style.backgroundImage = '';
-                roughThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
+        ['geometry-thin-walled', 'geometryThinWalled', /*checkbox*/, /*no thumb*/],
+        ['geometry-normal', 'geometryNormal', 'geometryNormalUseImage', 'geometryNormalImgDataUrl'],
+        ['geometry-tangent', 'geometryTangent', 'geometryTangentUseImage', 'geometryTangentImgDataUrl'],
+        ['geometry-coat-normal', 'geometryCoatNormal', 'geometryCoatNormalUseImage', 'geometryCoatNormalImgDataUrl'],
+        ['geometry-coat-tangent', 'geometryCoatTangent', 'geometryCoatTangentUseImage', 'geometryCoatTangentImgDataUrl'],
+    ];
 
-    // — NEW: roughness-anisotropy —
-    const roughAniEl = document.getElementById('roughness-anisotropy');
-    if (roughAniEl) {
-        roughAniEl.value = def.roughnessAnisotropy;
-        roughAniEl.disabled = def.roughnessAnisotropyUseImage;
-        grayOutLabelAndHandle(roughAniEl, def.roughnessAnisotropyUseImage);
-        const roughAniThumb = roughAniEl.closest('.row').querySelector('.thumb-button');
-        if (roughAniThumb) {
-            if (def.roughnessAnisotropyUseImage && def.roughnessAnisotropyImgDataUrl) {
-                roughAniThumb.style.backgroundImage = `url(${def.roughnessAnisotropyImgDataUrl})`;
-                roughAniThumb.style.backgroundSize = 'cover';
-                roughAniThumb.style.backgroundColor = 'transparent';
-            } else {
-                roughAniThumb.style.backgroundImage = '';
-                roughAniThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
+    fields.forEach(([id, key, useKey, imgKey]) => {
+        loadField(id, {
+            value: def[key],
+            useImage: def[useKey],
+            imgDataUrl: def[imgKey]
+        }, {
+            noThumb: id === 'geometry-thin-walled'
+        });
+    });
 
-    // — NEW: ior —
-    const iorEl = document.getElementById('ior');
-    if (iorEl) {
-        iorEl.value = def.ior;
-        iorEl.disabled = def.iorUseImage;
-        grayOutLabelAndHandle(iorEl, def.iorUseImage);
-        const iorThumb = iorEl.closest('.row').querySelector('.thumb-button');
-        if (iorThumb) {
-            if (def.iorUseImage && def.iorImgDataUrl) {
-                iorThumb.style.backgroundImage = `url(${def.iorImgDataUrl})`;
-                iorThumb.style.backgroundSize = 'cover';
-                iorThumb.style.backgroundColor = 'transparent';
-            } else {
-                iorThumb.style.backgroundImage = '';
-                iorThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
+    // → textureSize field
+    const sizeEl = document.getElementById('texture-size');
+    sizeEl.value = def.textureSize || '';
+    sizeEl.disabled = false;  // always editable
+    grayOutLabelAndHandle(sizeEl, false);
 
-    // — NEW: depth —
-    const depthEl = document.getElementById('depth');
-    if (depthEl) {
-        depthEl.value = def.depth;
-        depthEl.disabled = def.depthUseImage;
-        grayOutLabelAndHandle(depthEl, def.depthUseImage);
-        const depthThumb = depthEl.closest('.row').querySelector('.thumb-button');
-        if (depthThumb) {
-            if (def.depthUseImage && def.depthImgDataUrl) {
-                depthThumb.style.backgroundImage = `url(${def.depthImgDataUrl})`;
-                depthThumb.style.backgroundSize = 'cover';
-                depthThumb.style.backgroundColor = 'transparent';
-            } else {
-                depthThumb.style.backgroundImage = '';
-                depthThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
-
-    // — NEW: scatter —
-    const scatterEl = document.getElementById('scatter');
-    if (scatterEl) {
-        scatterEl.value = def.scatter;
-        scatterEl.disabled = def.scatterUseImage;
-        grayOutLabelAndHandle(scatterEl, def.scatterUseImage);
-        const scatterThumb = scatterEl.closest('.row').querySelector('.thumb-button');
-        if (scatterThumb) {
-            if (def.scatterUseImage && def.scatterImgDataUrl) {
-                scatterThumb.style.backgroundImage = `url(${def.scatterImgDataUrl})`;
-                scatterThumb.style.backgroundSize = 'cover';
-                scatterThumb.style.backgroundColor = 'transparent';
-            } else {
-                scatterThumb.style.backgroundImage = '';
-                scatterThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
-
-    // — NEW: scatter-anisotropy —
-    const scatterAniEl = document.getElementById('scatter-anisotropy');
-    if (scatterAniEl) {
-        scatterAniEl.value = def.scatterAnisotropy;
-        scatterAniEl.disabled = def.scatterAnisotropyUseImage;
-        grayOutLabelAndHandle(scatterAniEl, def.scatterAnisotropyUseImage);
-        const scatterAniThumb = scatterAniEl.closest('.row').querySelector('.thumb-button');
-        if (scatterAniThumb) {
-            if (def.scatterAnisotropyUseImage && def.scatterAnisotropyImgDataUrl) {
-                scatterAniThumb.style.backgroundImage = `url(${def.scatterAnisotropyImgDataUrl})`;
-                scatterAniThumb.style.backgroundSize = 'cover';
-                scatterAniThumb.style.backgroundColor = 'transparent';
-            } else {
-                scatterAniThumb.style.backgroundImage = '';
-                scatterAniThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
-
-    // — NEW: dispersion-scale —
-    const dispEl = document.getElementById('dispersion-scale');
-    if (dispEl) {
-        dispEl.value = def.dispersionScale;
-        dispEl.disabled = def.dispersionScaleUseImage;
-        grayOutLabelAndHandle(dispEl, def.dispersionScaleUseImage);
-        const dispThumb = dispEl.closest('.row').querySelector('.thumb-button');
-        if (dispThumb) {
-            if (def.dispersionScaleUseImage && def.dispersionScaleImgDataUrl) {
-                dispThumb.style.backgroundImage = `url(${def.dispersionScaleImgDataUrl})`;
-                dispThumb.style.backgroundSize = 'cover';
-                dispThumb.style.backgroundColor = 'transparent';
-            } else {
-                dispThumb.style.backgroundImage = '';
-                dispThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
-
-    // — NEW: abbe —
-    const abbeEl = document.getElementById('abbe');
-    if (abbeEl) {
-        abbeEl.value = def.abbe;
-        abbeEl.disabled = def.abbeUseImage;
-        grayOutLabelAndHandle(abbeEl, def.abbeUseImage);
-        const abbeThumb = abbeEl.closest('.row').querySelector('.thumb-button');
-        if (abbeThumb) {
-            if (def.abbeUseImage && def.abbeImgDataUrl) {
-                abbeThumb.style.backgroundImage = `url(${def.abbeImgDataUrl})`;
-                abbeThumb.style.backgroundSize = 'cover';
-                abbeThumb.style.backgroundColor = 'transparent';
-            } else {
-                abbeThumb.style.backgroundImage = '';
-                abbeThumb.style.backgroundColor = '#ccc';
-            }
-        }
-    }
-
-    // → After setting any weight, we also need to hide subordinate rows if weight === 0
+    // 5) re-hide subordinate rows
     toggleBaseRows();
     toggleSpecRows();
     toggleTransRows();
+    toggleSubsurfaceRows();
+    toggleCoatRows();
+    toggleFuzzRows();
+    toggleEmissionRows();
+    toggleThinFilmRows();
+    toggleGeometryRows();
 
-    document
-        .querySelectorAll('#palette .content .row input')
-        .forEach(inputEl => {
-            grayOutLabelAndHandle(inputEl, inputEl.disabled);
-        });
-
-    // finally sync the popover buttons
+    // 6) re-gray all disabled inputs & sync popovers
+    document.querySelectorAll('#palette .content .row input')
+        .forEach(inputEl => grayOutLabelAndHandle(inputEl, inputEl.disabled));
     updateImgImportControls();
 }
 
@@ -566,6 +431,61 @@ function writeInputsIntoSelectedObjectTexture() {
     if (abbeEl) def.abbe = parseFloat(abbeEl.value) || 0;
     def.abbeUseImage = def.abbeUseImage || false;
 
+    def.subsurfaceWeight = parseFloat(document.getElementById('subsurface-weight').value) || 0;
+    def.subsurfaceColor = document.getElementById('subsurface-color').value;
+    def.subsurfaceColorUseImage = def.subsurfaceColorUseImage || false;
+    def.subsurfaceRadius = document.getElementById('subsurface-radius').value;
+    def.subsurfaceRadiusUseImage = def.subsurfaceRadiusUseImage || false;
+    def.subsurfaceRadiusScale = document.getElementById('subsurface-radius-scale').value;
+    def.subsurfaceRadiusScaleUseImage = def.subsurfaceRadiusScaleUseImage || false;
+    def.subsurfaceScatterAnisotropy = document.getElementById('subsurface-scatter-anisotropy').value;
+    def.subsurfaceScatterAnisotropyUseImage = def.subsurfaceScatterAnisotropyUseImage || false;
+
+    def.coatWeight = parseFloat(document.getElementById('coat-weight').value) || 0;
+    def.coatColor = document.getElementById('coat-color').value;
+    def.coatColorUseImage = def.coatColorUseImage || false;
+    def.coatRoughness = document.getElementById('coat-roughness').value;
+    def.coatRoughnessUseImage = def.coatRoughnessUseImage || false;
+    def.coatRoughnessAnisotropy = document.getElementById('coat-roughness-anisotropy').value;
+    def.coatRoughnessAnisotropyUseImage = def.coatRoughnessAnisotropyUseImage || false;
+    def.coatIor = document.getElementById('coat-ior').value;
+    def.coatIorUseImage = def.coatIorUseImage || false;
+    def.coatDarkening = document.getElementById('coat-darkening').value;
+    def.coatDarkeningUseImage = def.coatDarkeningUseImage || false;
+
+    def.fuzzWeight = parseFloat(document.getElementById('fuzz-weight').value) || 0;
+    def.fuzzColor = document.getElementById('fuzz-color').value;
+    def.fuzzColorUseImage = def.fuzzColorUseImage || false;
+    def.fuzzRoughness = document.getElementById('fuzz-roughness').value;
+    def.fuzzRoughnessUseImage = def.fuzzRoughnessUseImage || false;
+
+    def.emissionWeight = parseFloat(document.getElementById('emission-weight').value) || 0;
+    def.emissionColor = document.getElementById('emission-color').value;
+    def.emissionColorUseImage = def.emissionColorUseImage || false;
+
+    def.thinFilmWeight = parseFloat(document.getElementById('thin-film-weight').value) || 0;
+    def.thinFilmThickness = document.getElementById('thin-film-thickness').value;
+    def.thinFilmThicknessUseImage = def.thinFilmThicknessUseImage || false;
+    def.thinFilmIor = document.getElementById('thin-film-ior').value;
+    def.thinFilmIorUseImage = def.thinFilmIorUseImage || false;
+
+    def.geometryWeight = parseFloat(document.getElementById('geometry-weight').value) || 0;
+    def.geometryThinWalled = document.getElementById('geometry-thin-walled').checked;
+    def.geometryNormal = document.getElementById('geometry-normal').value;
+    def.geometryNormalUseImage = def.geometryNormalUseImage || false;
+    def.geometryTangent = document.getElementById('geometry-tangent').value;
+    def.geometryTangentUseImage = def.geometryTangentUseImage || false;
+    def.geometryCoatNormal = document.getElementById('geometry-coat-normal').value;
+    def.geometryCoatNormalUseImage = def.geometryCoatNormalUseImage || false;
+    def.geometryCoatTangent = document.getElementById('geometry-coat-tangent').value;
+    def.geometryCoatTangentUseImage = def.geometryCoatTangentUseImage || false;
+
+    // — NEW: textureSize field —
+    const sizeEl = document.getElementById('texture-size');
+    if (sizeEl) {
+        def.textureSize = sizeEl.value;
+    }
+
     updateTextureThumbnail(selectedObjectTextureIndex);
     updateAllObjectsForTexture(selectedObjectTextureIndex);
     updateRenderControl(selectedObjectTextureIndex);
@@ -647,7 +567,80 @@ function createNewTexture() {
         depthImg: null,
         scatterImg: null,
         dispersionImg: null,
-        abbeImg: null
+        abbeImg: null,
+
+        subsurfaceWeight: 0,
+        subsurfaceColor: '#777777',
+        subsurfaceColorUseImage: false,
+        subsurfaceColorImgDataUrl: null,
+        subsurfaceRadius: 0,
+        subsurfaceRadiusUseImage: false,
+        subsurfaceRadiusImgDataUrl: null,
+        subsurfaceRadiusScale: 0,
+        subsurfaceRadiusScaleUseImage: false,
+        subsurfaceRadiusScaleImgDataUrl: null,
+        subsurfaceScatterAnisotropy: 0,
+        subsurfaceScatterAnisotropyUseImage: false,
+        subsurfaceScatterAnisotropyImgDataUrl: null,
+
+        coatWeight: 0,
+        coatColor: '#777777',
+        coatColorUseImage: false,
+        coatColorImgDataUrl: null,
+        coatRoughness: 0,
+        coatRoughnessUseImage: false,
+        coatRoughnessImgDataUrl: null,
+        coatRoughnessAnisotropy: 0,
+        coatRoughnessAnisotropyUseImage: false,
+        coatRoughnessAnisotropyImgDataUrl: null,
+        coatIor: 1.5,
+        coatIorUseImage: false,
+        coatIorImgDataUrl: null,
+        coatDarkening: 0,
+        coatDarkeningUseImage: false,
+        coatDarkeningImgDataUrl: null,
+
+        fuzzWeight: 0,
+        fuzzColor: '#777777',
+        fuzzColorUseImage: false,
+        fuzzColorImgDataUrl: null,
+        fuzzRoughness: 0,
+        fuzzRoughnessUseImage: false,
+        fuzzRoughnessImgDataUrl: null,
+
+        emissionWeight: 0,
+        emissionColor: '#777777',
+        emissionColorUseImage: false,
+        emissionColorImgDataUrl: null,
+
+        thinFilmWeight: 0,
+        thinFilmThickness: 0,
+        thinFilmThicknessUseImage: false,
+        thinFilmThicknessImgDataUrl: null,
+        thinFilmIor: 0,
+        thinFilmIorUseImage: false,
+        thinFilmIorImgDataUrl: null,
+
+        geometryWeight: 0,
+        geometryThinWalled: 0,
+        geometryNormal: 0,
+        geometryNormalUseImage: false,
+        geometryNormalImgDataUrl: null,
+        geometryTangent: 0,
+        geometryTangentUseImage: false,
+        geometryTangentImgDataUrl: null,
+        geometryCoatNormal: 0,
+        geometryCoatNormalUseImage: false,
+        geometryCoatNormalImgDataUrl: null,
+        geometryCoatTangent: 0,
+        geometryCoatTangentUseImage: false,
+        geometryCoatTangentImgDataUrl: null,
+
+        // right after your other PBR properties…
+        textureSize: '1',
+        textureSizeUseImage: false,
+        textureSizeImgDataUrl: null,
+
     };
 
     const newIndex = textures.length;
@@ -779,6 +772,12 @@ function exitCreateTextureContext() {
     
     // ─── Reset the Render palette ───
     updateRenderControl(null);
+
+    // ─── Restore the previous shape, if we’re coming back from child-texture edit ───
+    if (_restoreSelectedShape) {
+        selectShape(_restoreSelectedShape);
+        _restoreSelectedShape = null;
+    }
 }
 
 // ---------------------------------------------------------
@@ -1316,6 +1315,60 @@ function toggleTransRows() {
     });
 }
 
+function toggleSubsurfaceRows() {
+    const v = parseFloat(document.getElementById('subsurface-weight').value) || 0;
+    ['subsurface-color', 'subsurface-radius', 'subsurface-radius-scale', 'subsurface-scatter-anisotropy']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
+function toggleCoatRows() {
+    const v = parseFloat(document.getElementById('coat-weight').value) || 0;
+    ['coat-color', 'coat-roughness', 'coat-roughness-anisotropy', 'coat-ior', 'coat-darkening']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
+function toggleFuzzRows() {
+    const v = parseFloat(document.getElementById('fuzz-weight').value) || 0;
+    ['fuzz-color', 'fuzz-roughness']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
+function toggleEmissionRows() {
+    const v = parseFloat(document.getElementById('emission-weight').value) || 0;
+    ['emission-color']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
+function toggleThinFilmRows() {
+    const v = parseFloat(document.getElementById('thin-film-weight').value) || 0;
+    ['thin-film-thickness','thin-film-ior']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
+function toggleGeometryRows() {
+    const v = parseFloat(document.getElementById('geometry-weight').value) || 0;
+    ['geometry-thin-walled', 'geometry-normal', 'geometry-tangent', 'geometry-coat-normal', 'geometry-coat-tangent']
+        .forEach(id => {
+            const row = document.getElementById(id).closest('.row');
+            if (row) row.style.display = v === 0 ? 'none' : 'flex';
+        });
+}
+
 // --------------------------------------------------
 // DOMContentLoaded: initialize everything + wire events
 // --------------------------------------------------
@@ -1392,7 +1445,75 @@ window.addEventListener('DOMContentLoaded', function () {
         depthImg: null,
         scatterImg: null,
         dispersionImg: null,
-        abbeImg: null
+        abbeImg: null,
+
+        subsurfaceWeight: 0,
+        subsurfaceColor: '#777777',
+        subsurfaceColorUseImage: false,
+        subsurfaceColorImgDataUrl: null,
+        subsurfaceRadius: 0,
+        subsurfaceRadiusUseImage: false,
+        subsurfaceRadiusImgDataUrl: null,
+        subsurfaceRadiusScale: 0,
+        subsurfaceRadiusScaleUseImage: false,
+        subsurfaceRadiusScaleImgDataUrl: null,
+        subsurfaceScatterAnisotropy: 0,
+        subsurfaceScatterAnisotropyUseImage: false,
+        subsurfaceScatterAnisotropyImgDataUrl: null,
+
+        coatWeight: 0,
+        coatColor: '#777777',
+        coatColorUseImage: false,
+        coatColorImgDataUrl: null,
+        coatRoughness: 0,
+        coatRoughnessUseImage: false,
+        coatRoughnessImgDataUrl: null,
+        coatRoughnessAnisotropy: 0,
+        coatRoughnessAnisotropyUseImage: false,
+        coatRoughnessAnisotropyImgDataUrl: null,
+        coatIor: 0,
+        coatIorUseImage: false,
+        coatIorImgDataUrl: null,
+        coatDarkening: 0,
+        coatDarkeningUseImage: false,
+        coatDarkeningImgDataUrl: null,
+
+        fuzzWeight: 0,
+        fuzzColor: '#777777',
+        fuzzColorUseImage: false,
+        fuzzColorImgDataUrl: null,
+        fuzzRoughness: 0,
+        fuzzRoughnessUseImage: false,
+        fuzzRoughnessImgDataUrl: null,
+
+        emissionWeight: 0,
+        emissionColor: '#777777',
+        emissionColorUseImage: false,
+        emissionColorImgDataUrl: null,
+
+        thinFilmWeight: 0,
+        thinFilmThickness: 0,
+        thinFilmThicknessUseImage: false,
+        thinFilmThicknessImgDataUrl: null,
+        thinFilmIor : 0,
+        thinFilmIorUseImage: false,
+        thinFilmIorImgDataUrl: null,
+
+        geometryWeight: 0,
+        geometryThinWalled: false,
+        geometryNormal: 0,
+        geometryNormalUseImage: false,
+        geometryNormalImgDataUrl: null,
+        geometryTangent: 0,
+        geometryTangentUseImage: false,
+        geometryTangentImgDataUrl: null,
+        geometryCoatNormal: 0,
+        geometryCoatNormalUseImage: false,
+        geometryCoatNormalImgDataUrl: null,
+        geometryCoatTangent: 0,
+        geometryCoatTangentUseImage: false,
+        geometryCoatTangentImgDataUrl: null,
+
     };
     textures.push(defaultDef);
     addTextureToList(defaultDef, 0);
@@ -1472,7 +1593,25 @@ window.addEventListener('DOMContentLoaded', function () {
         'scatter',
         'scatter-anisotropy',
         'dispersion-scale',
-        'abbe'
+        'abbe',
+        'subsurface-color',
+        'coat-color',
+        'fuzz-color',
+        'emission-color',
+        'subsurface-radius',
+        'subsurface-radius-scale',
+        'subsurface-scatter-anisotropy',
+        'coat-roughness',
+        'coat-roughness-anisotropy',
+        'coat-ior',
+        'coat-darkening',
+        'fuzz-roughness',
+        'thin-film-thickness',
+        'thin-film-ior',
+        'geometry-normal',
+        'geometry-tangent',
+        'geometry-coat-normal',
+        'geometry-coat-tangent',
     ];
     imageFields.forEach(fieldId => {
         const inputEl = document.getElementById(fieldId);
@@ -1511,7 +1650,13 @@ window.addEventListener('DOMContentLoaded', function () {
         'scatter',
         'scatter-anisotropy',
         'dispersion-scale',
-        'abbe'
+        'abbe',
+        'subsurface-weight', 'subsurface-radius', 'subsurface-radius-scale', 'subsurface-scatter-anisotropy',
+        'coat-weight', 'coat-roughness', 'coat-roughness-anisotropy', 'coat-ior', 'coat-darkening',
+        'fuzz-weight', 'fuzz-roughness',
+        'emission-weight',
+        'geometry-weight', 'geometry-thin-walled', 'geometry-normal', 'geometry-tangent', 'geometry-coat-normal', 'geometry-coat-tangent',
+        'texture-size',                // ← add this here
     ];
     extraIds.forEach(id => {
         const el = document.getElementById(id);
@@ -1528,10 +1673,206 @@ window.addEventListener('DOMContentLoaded', function () {
     const baseWeightEl = document.getElementById('base-weight');
     baseWeightEl.addEventListener('input', toggleBaseRows);
 
+    document.getElementById('subsurface-weight').addEventListener('input', () => {
+        toggleSubsurfaceRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+    document.getElementById('coat-weight').addEventListener('input', () => {
+        toggleCoatRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+    document.getElementById('fuzz-weight').addEventListener('input', () => {
+        toggleFuzzRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+    document.getElementById('emission-weight').addEventListener('input', () => {
+        toggleEmissionRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+    document.getElementById('thin-film-weight').addEventListener('input', () => {
+        toggleThinFilmRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+    document.getElementById('geometry-weight').addEventListener('input', () => {
+        toggleGeometryRows();
+        writeInputsIntoSelectedObjectTexture();
+    });
+
     // Initialize hiding of spec/trans rows if weights are zero initially:
     toggleSpecRows();
     toggleTransRows();
     toggleBaseRows();
+    toggleSubsurfaceRows();
+    toggleCoatRows();
+    toggleFuzzRows();
+    toggleEmissionRows();
+    toggleThinFilmRows();
+    toggleGeometryRows();
+
+    const sizeBtn = document.getElementById('btn-texture-size');
+    const sizeModal = document.getElementById('texture-size-modal');
+    const sizeInput = document.getElementById('texture-size-modal-input');
+    const sizeOk = document.getElementById('texture-size-ok');
+    const sizeCancel = document.getElementById('texture-size-cancel');
+
+    sizeBtn.addEventListener('click', () => {
+        // prefill with current texture’s size
+        const idx = selectedObjectTextureIndex;
+        sizeInput.value = (idx != null) ? textures[idx].textureSize : '';
+        sizeModal.style.display = 'flex';
+    });
+
+    sizeCancel.addEventListener('click', () => {
+        sizeModal.style.display = 'none';
+    });
+
+    sizeOk.addEventListener('click', () => {
+        const idx = selectedObjectTextureIndex;
+        if (idx != null) {
+            const val = sizeInput.value.trim();
+            textures[idx].textureSize = val;
+            // update the inline field immediately
+            document.getElementById('texture-size').value = val;
+        }
+        sizeModal.style.display = 'none';
+    });
+
+
+    // — Duplicate texture flow —
+    const dupBtn = document.getElementById('btn-duplicate-texture');
+    const dupModal = document.getElementById('duplicate-texture-modal');
+    const dupNameFld = document.getElementById('duplicate-texture-name');
+    const dupOk = document.getElementById('duplicate-texture-ok');
+    const dupCancel = document.getElementById('duplicate-texture-cancel');
+
+    dupBtn.addEventListener('click', () => {
+        // prefill with “Copy of …”
+        const idx = selectedObjectTextureIndex;
+        const baseName = (idx !== null && textures[idx]) ? textures[idx].name : '';
+        dupNameFld.value = `Copy of ${baseName}`;
+        dupModal.style.display = 'flex';
+    });
+
+    dupCancel.addEventListener('click', () => {
+        dupModal.style.display = 'none';
+    });
+
+    dupOk.addEventListener('click', () => {
+        const idx = selectedObjectTextureIndex;
+        if (idx === null) return dupModal.style.display = 'none';
+
+        // deep‐clone the current texture definition
+        const original = textures[idx];
+        const clone = JSON.parse(JSON.stringify(original));
+        clone.name = dupNameFld.value.trim() || original.name;
+
+        // append new texture
+        const newIndex = textures.length;
+        textures.push(clone);
+        addTextureToList(clone, newIndex);
+
+        // reassign the selected SVG shape
+        if (currentSelectedShape) {
+            const obj = sceneObjects.find(o => o.el === currentSelectedShape);
+            if (obj) {
+                obj.textureIndex = newIndex;
+                updateSingleObject(currentSelectedShape, newIndex);
+            }
+        }
+
+        // refresh UI
+        selectShape(currentSelectedShape);
+        dupModal.style.display = 'none';
+    });
+
+
+    // — Edit child texture popover & flow —
+    const editChildBtn = document.getElementById('btn-edit-child-texture');
+    editChildBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        showChildTexturePopover();
+    });
+
+    function showChildTexturePopover() {
+        const btnRect = editChildBtn.getBoundingClientRect();
+
+        // 1) create & style as before (omit the old pop.style.top/left)
+        const pop = document.createElement('div');
+        pop.id = 'child-texture-popover';
+        Object.assign(pop.style, {
+            position: 'absolute',
+            background: '#fff',
+            border: '1px solid #888',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            padding: '8px',
+            zIndex: '2000',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px'
+        });
+
+        // 2) populate with texture clones...
+        textures.forEach((_, i) => {
+            const orig = document.querySelector(`.texture-item[data-texture-index="${i}"]`);
+            const clone = orig.cloneNode(true);
+            clone.style.cursor = 'pointer';
+            clone.addEventListener('click', () => {
+                // remember which shape we came from
+                _restoreSelectedShape = currentSelectedShape;
+
+                // select that texture in Resource Manager
+                selectTexture(i);
+
+                // enter “create texture” mode
+                enterCreateTextureContext();
+
+                // close the popover
+                document.body.removeChild(pop);
+            });
+            pop.appendChild(clone);
+        });
+
+        // 3) append first so we can measure it
+        document.body.appendChild(pop);
+
+        // 4) measure and reposition
+        const popRect = pop.getBoundingClientRect();
+        // align pop’s bottom-right to button’s bottom-left:
+        pop.style.left = `${btnRect.left - popRect.width}px`;
+        pop.style.top = `${btnRect.bottom - popRect.height}px`;
+
+        // teardown on outside click, in capture phase:
+        function onClick(e) {
+            if (!pop.contains(e.target) && e.target !== editChildBtn) {
+                // remove listener
+                window.removeEventListener('click', onClick, true);
+                pop.remove();
+                // prevent this click from reaching the SVG
+                e.stopPropagation();
+            }
+        }
+        // listen in capture so we can stop it before SVG sees it
+        window.addEventListener('click', onClick, /* useCapture */ true);
+    }
+
+    selectShape(null);
+
+    // — Surface Hatch dialog —
+    const hatchBtn = document.getElementById('btn-edit-surface-hatch');
+    const hatchModal = document.getElementById('surface-hatch-modal');
+    const hatchOk = document.getElementById('surface-hatch-ok');
+    const hatchCancel = document.getElementById('surface-hatch-cancel');
+
+    hatchBtn.addEventListener('click', () => {
+        hatchModal.style.display = 'flex';
+    });
+
+    [hatchOk, hatchCancel].forEach(btn => {
+        btn.addEventListener('click', () => {
+            hatchModal.style.display = 'none';
+        });
+    });
+
 });
 
 let currentSelectedShape = null;
@@ -1693,14 +2034,20 @@ function showRenderPopover() {
 
     // 5) Show & outside-click teardown
     document.body.appendChild(pop);
+    // ─── outside‐click teardown in capture phase ───
     setTimeout(() => {
-        window.addEventListener('click', function onClick(e) {
-            if (!pop.contains(e.target) &&
-                !document.getElementById('render-control').contains(e.target)) {
-                window.removeEventListener('click', onClick);
+        function onClick(e) {
+            const rcBtn = document.getElementById('render-control');
+            if (!pop.contains(e.target) && !rcBtn.contains(e.target)) {
+                // remove listener (capture)
+                window.removeEventListener('click', onClick, true);
                 pop.remove();
+                // prevent SVG from seeing this click
+                e.stopPropagation();
             }
-        });
+        }
+        // NOTE the “true” → capture phase
+        window.addEventListener('click', onClick, true);
     }, 0);
 }
 
