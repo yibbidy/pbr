@@ -1271,7 +1271,7 @@ function toggleBaseRows() {
 
 
 // --------------------------------------------------
-// Remove or show “specular” sub-rows when spec Weight changes
+// Hide or show “specular” sub-rows when spec weight changes
 // --------------------------------------------------
 function toggleSpecRows() {
     const specVal = parseFloat(document.getElementById('spec-weight').value) || 0;
