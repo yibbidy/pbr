@@ -898,11 +898,6 @@ function drawRandomShape() {
     el.setAttribute("stroke", "#333");
     el.setAttribute("stroke-width", "1");
     svg.appendChild(el);
-
-    sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
-    el.addEventListener('click', () => selectTexture(currentTextureIndex));
-
-    svg.appendChild(el);
     sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
     el.addEventListener('click', (e) => {
         e.stopPropagation();
