@@ -1206,7 +1206,8 @@ function showImgImportPopover(fieldId) {
     document.body.appendChild(imgImportPopover);
     updateImgImportControls();
     setTimeout(() => {
-        window.addEventListener('click', onImgPopoverWindowClick);
+        // use capture phase so this fires before the SVG click handler
+        window.addEventListener('click', onImgPopoverWindowClick, true);
     }, 0);
 }
 
@@ -1237,7 +1238,7 @@ function updateImgImportControls() {
 
 function hideImgImportPopover() {
     if (!imgImportPopover) return;
-    window.removeEventListener('click', onImgPopoverWindowClick);
+    window.removeEventListener('click', onImgPopoverWindowClick, true);
     document.body.removeChild(imgImportPopover);
     imgImportPopover = null;
     imgImportField = null;
@@ -1248,6 +1249,9 @@ function onImgPopoverWindowClick(e) {
     if (imgImportPopover.contains(e.target)) return;
     if (e.target.closest('.thumb-button')) return;
     hideImgImportPopover();
+    // prevent this click from propagating to the SVG which would
+    // otherwise deselect the current object
+    e.stopPropagation();
 }
 
 // --------------------------------------------------
