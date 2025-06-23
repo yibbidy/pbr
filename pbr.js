@@ -898,11 +898,6 @@ function drawRandomShape() {
     el.setAttribute("stroke", "#333");
     el.setAttribute("stroke-width", "1");
     svg.appendChild(el);
-
-    sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
-    el.addEventListener('click', () => selectTexture(currentTextureIndex));
-
-    svg.appendChild(el);
     sceneObjects.push({ el: el, textureIndex: currentTextureIndex });
     el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1276,7 +1271,7 @@ function toggleBaseRows() {
 
 
 // --------------------------------------------------
-// Remove or show “specular” sub-rows when spec Weight changes
+// Hide or show “specular” sub-rows when spec weight changes
 // --------------------------------------------------
 function toggleSpecRows() {
     const specVal = parseFloat(document.getElementById('spec-weight').value) || 0;
