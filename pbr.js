@@ -35,12 +35,21 @@ let selectedObjectTextureIndex = null;
 // remember which shape to restore after child-texture edit
 let _restoreSelectedShape = null;
 
+
+let favoriteRows = [];
+let favoriteNodeById = new Map();
+let favoriteSourceRows = [];
+let favoriteCollapsed = false;
+let favoriteDrag = null;
+
+
 function setEditorEnabled(enabled) {
     // all form controls under #palette.content (inputs, thumb-buttons, drag handles)
     document.querySelectorAll('#palette .content input, #palette .content button, #palette .content .drag-handle')
         .forEach(el => {
             // skip the toggle button in header
             if (el.closest('.header')) return;
+            if (el.classList.contains('favorite-star') || el.classList.contains('favorite-arrow')) return;
             el.disabled = !enabled;
             el.style.opacity = enabled ? '' : '0.5';
             // grey out its label too
@@ -1254,6 +1263,308 @@ function onImgPopoverWindowClick(e) {
     e.stopPropagation();
 }
 
+
+function buildFavoritesFeature() {
+    const content = document.querySelector('#palette .content');
+    const section = document.getElementById('favorites-section');
+    const list = document.getElementById('favorites-list');
+    const preview = document.getElementById('favorites-drop-preview');
+    const toggle = document.getElementById('favorites-toggle');
+    if (!content || !section || !list || !toggle) return;
+
+    favoriteSourceRows = Array.from(content.querySelectorAll(':scope > .row'))
+        .filter(row => !row.classList.contains('duplicate-row'))
+        .filter(row => row.querySelector('label') && (row.querySelector('input') || row.querySelector('.thumb-button')));
+
+    favoriteSourceRows.forEach((row, idx) => {
+        const key = row.querySelector('input')?.id || `favorite-row-${idx}`;
+        row.dataset.favoriteKey = key;
+        const star = document.createElement('button');
+        star.className = 'favorite-star';
+        star.type = 'button';
+        star.textContent = '☆';
+        star.title = 'Add to favorites';
+        star.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleFavoriteFromSource(key);
+        });
+        row.insertBefore(star, row.firstChild);
+    });
+
+    toggle.addEventListener('click', () => {
+        favoriteCollapsed = !favoriteCollapsed;
+        section.classList.toggle('collapsed', favoriteCollapsed);
+    });
+
+    list.addEventListener('pointermove', onFavoriteDragMove);
+    list.addEventListener('pointerup', onFavoriteDragEnd);
+    list.addEventListener('pointercancel', onFavoriteDragEnd);
+
+    syncSourceFavoriteStars();
+
+    function syncSourceFavoriteStars() {
+        favoriteSourceRows.forEach(row => {
+            const star = row.querySelector('.favorite-star');
+            const active = !!favoriteNodeById.get(row.dataset.favoriteKey);
+            if (star) {
+                star.textContent = active ? '★' : '☆';
+                star.classList.toggle('is-favorited', active);
+            }
+        });
+    }
+
+    function toggleFavoriteFromSource(key) {
+        if (favoriteNodeById.has(key)) {
+            removeFavoriteNode(key);
+        } else {
+            favoriteRows.push(key);
+            favoriteNodeById.set(key, { id: key, sourceKey: key, children: [], parentId: null, collapsed: false });
+        }
+        renderFavorites();
+    }
+
+    function removeFavoriteNode(key) {
+        const node = favoriteNodeById.get(key);
+        if (!node) return;
+        node.children.forEach(childId => removeFavoriteNode(childId));
+        if (node.parentId) {
+            const parent = favoriteNodeById.get(node.parentId);
+            if (parent) parent.children = parent.children.filter(id => id !== key);
+        } else {
+            favoriteRows = favoriteRows.filter(id => id !== key);
+        }
+        favoriteNodeById.delete(key);
+    }
+
+    function getSourceRow(key) {
+        return favoriteSourceRows.find(row => row.dataset.favoriteKey === key);
+    }
+
+    function cloneInteractiveRow(key, node) {
+        const source = getSourceRow(key);
+        if (!source) return document.createElement('div');
+        const clone = source.cloneNode(true);
+        clone.classList.add('favorite-row');
+        clone.dataset.favoriteKey = key;
+
+        clone.querySelectorAll('input, button, .drag-handle').forEach(el => {
+            if (!el.classList.contains('favorite-star') && !el.classList.contains('favorite-arrow')) {
+                el.removeAttribute('id');
+            }
+        });
+
+        let star = clone.querySelector('.favorite-star');
+        if (!star) {
+            star = document.createElement('button');
+            star.className = 'favorite-star';
+            clone.insertBefore(star, clone.firstChild);
+        }
+        star.textContent = '★';
+        star.classList.add('is-favorited');
+        star.title = 'Drag to reorder or click to remove';
+
+        const arrow = document.createElement('button');
+        arrow.type = 'button';
+        arrow.className = 'favorite-arrow';
+        arrow.textContent = '▼';
+        arrow.classList.toggle('has-children', node.children.length > 0);
+        arrow.classList.toggle('is-collapsed', node.collapsed);
+        arrow.addEventListener('click', (e) => {
+            e.stopPropagation();
+            node.collapsed = !node.collapsed;
+            renderFavorites();
+        });
+        star.insertAdjacentElement('afterend', arrow);
+
+        star.addEventListener('pointerdown', (e) => onFavoriteDragStart(e, key));
+
+        const sourceInputs = source.querySelectorAll('input');
+        const cloneInputs = clone.querySelectorAll('input');
+        cloneInputs.forEach((input, i) => {
+            const src = sourceInputs[i];
+            if (!src) return;
+            input.value = src.value;
+            input.checked = src.checked;
+            input.disabled = src.disabled;
+            input.addEventListener('input', () => {
+                if (src.type === 'checkbox') src.checked = input.checked;
+                else src.value = input.value;
+                src.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            input.addEventListener('change', () => {
+                if (src.type === 'checkbox') src.checked = input.checked;
+                else src.value = input.value;
+                src.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            const sync = () => {
+                if (input.type === 'checkbox') input.checked = src.checked;
+                else input.value = src.value;
+                input.disabled = src.disabled;
+            };
+            src.addEventListener('input', sync);
+            src.addEventListener('change', sync);
+        });
+
+        const sourceThumb = source.querySelector('.thumb-button');
+        const cloneThumb = clone.querySelector('.thumb-button');
+        if (sourceThumb && cloneThumb) {
+            cloneThumb.style.backgroundImage = sourceThumb.style.backgroundImage;
+            cloneThumb.style.backgroundColor = sourceThumb.style.backgroundColor;
+            cloneThumb.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sourceThumb.click();
+            });
+            const observer = new MutationObserver(() => {
+                cloneThumb.style.backgroundImage = sourceThumb.style.backgroundImage;
+                cloneThumb.style.backgroundColor = sourceThumb.style.backgroundColor;
+            });
+            observer.observe(sourceThumb, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        const sourceHandle = source.querySelector('.drag-handle');
+        const cloneHandle = clone.querySelector('.drag-handle');
+        if (sourceHandle && cloneHandle) {
+            cloneHandle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                sourceHandle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: e.clientX, clientY: e.clientY }));
+            });
+        }
+
+        return clone;
+    }
+
+    function renderNode(nodeId, into) {
+        const node = favoriteNodeById.get(nodeId);
+        if (!node) return;
+        const rowEl = cloneInteractiveRow(node.sourceKey, node);
+        into.appendChild(rowEl);
+
+        if (node.children.length && !node.collapsed) {
+            const childWrap = document.createElement('div');
+            childWrap.className = 'favorite-children';
+            childWrap.style.paddingLeft = '22px';
+            node.children.forEach(childId => renderNode(childId, childWrap));
+            into.appendChild(childWrap);
+        }
+    }
+
+    function renderFavorites() {
+        list.innerHTML = '';
+        favoriteRows.forEach(nodeId => renderNode(nodeId, list));
+        syncSourceFavoriteStars();
+    }
+
+    function isDescendant(candidateParentId, nodeId) {
+        if (candidateParentId === nodeId) return true;
+        const node = favoriteNodeById.get(candidateParentId);
+        if (!node) return false;
+        return node.children.some(childId => isDescendant(childId, nodeId));
+    }
+
+    function detachNode(nodeId) {
+        const node = favoriteNodeById.get(nodeId);
+        if (!node) return;
+        if (node.parentId) {
+            const parent = favoriteNodeById.get(node.parentId);
+            if (parent) parent.children = parent.children.filter(id => id !== nodeId);
+        } else {
+            favoriteRows = favoriteRows.filter(id => id !== nodeId);
+        }
+        node.parentId = null;
+    }
+
+    function onFavoriteDragStart(e, nodeId) {
+        const row = e.target.closest('.favorite-row');
+        if (!row) return;
+        favoriteDrag = { nodeId, startX: e.clientX, startY: e.clientY, active: false, row };
+        row.setPointerCapture(e.pointerId);
+    }
+
+    function updatePreview(targetRow, mode) {
+        if (!targetRow || !preview) return;
+        const listRect = list.getBoundingClientRect();
+        const rect = targetRow.getBoundingClientRect();
+        let top = rect.top - listRect.top;
+        let left = rect.left - listRect.left;
+        let width = rect.width;
+        if (mode === 'after') top = rect.bottom - listRect.top;
+        if (mode === 'child') {
+            top = rect.bottom - listRect.top;
+            left += 26;
+            width -= 26;
+        }
+        preview.style.display = 'block';
+        preview.style.top = `${top - 2}px`;
+        preview.style.left = `${left}px`;
+        preview.style.width = `${Math.max(16, width)}px`;
+    }
+
+    function onFavoriteDragMove(e) {
+        if (!favoriteDrag) return;
+        if (!favoriteDrag.active) {
+            const moved = Math.hypot(e.clientX - favoriteDrag.startX, e.clientY - favoriteDrag.startY);
+            if (moved < 4) return;
+            favoriteDrag.active = true;
+        }
+        const targetRow = document.elementFromPoint(e.clientX, e.clientY)?.closest('.favorite-row');
+        if (!targetRow) {
+            preview.style.display = 'none';
+            favoriteDrag.drop = null;
+            return;
+        }
+        const targetId = targetRow.dataset.favoriteKey;
+        const rect = targetRow.getBoundingClientRect();
+        const rel = (e.clientY - rect.top) / rect.height;
+        let mode = 'child';
+        if (rel <= 0.25) mode = 'before';
+        else if (rel >= 0.75) mode = 'after';
+        if (targetId === favoriteDrag.nodeId && mode === 'child') {
+            preview.style.display = 'none';
+            favoriteDrag.drop = null;
+            return;
+        }
+        favoriteDrag.drop = { targetId, mode };
+        updatePreview(targetRow, mode);
+    }
+
+    function onFavoriteDragEnd(e) {
+        if (!favoriteDrag) return;
+        const wasDrag = favoriteDrag.active;
+        const sourceId = favoriteDrag.nodeId;
+        const drop = favoriteDrag.drop;
+        favoriteDrag = null;
+        preview.style.display = 'none';
+
+        if (!wasDrag) {
+            removeFavoriteNode(sourceId);
+            renderFavorites();
+            return;
+        }
+
+        if (!drop) return;
+        const node = favoriteNodeById.get(sourceId);
+        const target = favoriteNodeById.get(drop.targetId);
+        if (!node || !target) return;
+        if (sourceId === target.id) return;
+        if (drop.mode === 'child' && isDescendant(target.id, sourceId)) return;
+
+        detachNode(sourceId);
+
+        if (drop.mode === 'child') {
+            node.parentId = target.id;
+            target.children.push(sourceId);
+        } else {
+            const targetParent = target.parentId ? favoriteNodeById.get(target.parentId) : null;
+            const bucket = targetParent ? targetParent.children : favoriteRows;
+            const idx = bucket.indexOf(target.id);
+            const insertAt = drop.mode === 'before' ? idx : idx + 1;
+            bucket.splice(insertAt, 0, sourceId);
+            node.parentId = targetParent ? targetParent.id : null;
+        }
+        renderFavorites();
+    }
+}
+
 // --------------------------------------------------
 // Hide or show the three “base” sub-rows when base-weight changes
 // --------------------------------------------------
@@ -1372,6 +1683,8 @@ function toggleGeometryRows() {
 // DOMContentLoaded: initialize everything + wire events
 // --------------------------------------------------
 window.addEventListener('DOMContentLoaded', function () {
+    buildFavoritesFeature();
+
     // SVG background
     const svg = document.getElementById('scene');
     svg.style.backgroundColor = 'rgb(249, 249, 240)';
