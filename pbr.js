@@ -41,6 +41,7 @@ let favoriteNodeById = new Map();
 let favoriteSourceRows = [];
 let favoriteCollapsed = false;
 let favoriteDrag = null;
+let refreshFavoritesView = null;
 
 
 function setEditorEnabled(enabled) {
@@ -257,6 +258,8 @@ function loadTextureIntoEditor(idx) {
     toggleEmissionRows();
     toggleThinFilmRows();
     toggleGeometryRows();
+
+    if (refreshFavoritesView) refreshFavoritesView();
 
     // 6) re-gray all disabled inputs & sync popovers
     document.querySelectorAll('#palette .content .row input')
@@ -1347,6 +1350,9 @@ function buildFavoritesFeature() {
         clone.classList.add('favorite-row');
         clone.dataset.favoriteKey = key;
 
+        const cloneLabel = clone.querySelector('label');
+        if (cloneLabel) cloneLabel.textContent = cloneLabel.textContent.replace(/^\s+/, '');
+
         clone.querySelectorAll('input, button, .drag-handle').forEach(el => {
             if (!el.classList.contains('favorite-star') && !el.classList.contains('favorite-arrow')) {
                 el.removeAttribute('id');
@@ -1442,7 +1448,6 @@ function buildFavoritesFeature() {
         if (node.children.length && !node.collapsed) {
             const childWrap = document.createElement('div');
             childWrap.className = 'favorite-children';
-            childWrap.style.paddingLeft = '22px';
             node.children.forEach(childId => renderNode(childId, childWrap));
             into.appendChild(childWrap);
         }
@@ -1453,6 +1458,8 @@ function buildFavoritesFeature() {
         favoriteRows.forEach(nodeId => renderNode(nodeId, list));
         syncSourceFavoriteStars();
     }
+
+    refreshFavoritesView = renderFavorites;
 
     function isDescendant(candidateParentId, nodeId) {
         if (candidateParentId === nodeId) return true;
@@ -1482,14 +1489,14 @@ function buildFavoritesFeature() {
 
     function updatePreview(targetRow, mode) {
         if (!targetRow || !preview) return;
-        const listRect = list.getBoundingClientRect();
+        const sectionRect = section.getBoundingClientRect();
         const rect = targetRow.getBoundingClientRect();
-        let top = rect.top - listRect.top;
-        let left = rect.left - listRect.left;
+        let top = rect.top - sectionRect.top;
+        let left = rect.left - sectionRect.left;
         let width = rect.width;
-        if (mode === 'after') top = rect.bottom - listRect.top;
+        if (mode === 'after') top = rect.bottom - sectionRect.top;
         if (mode === 'child') {
-            top = rect.bottom - listRect.top;
+            top = rect.bottom - sectionRect.top;
             left += 26;
             width -= 26;
         }
@@ -2362,5 +2369,4 @@ function showRenderPopover() {
         window.addEventListener('click', onClick, true);
     }, 0);
 }
-
 
